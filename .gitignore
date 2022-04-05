@@ -1,6 +1,11 @@
-#user
-MediaFiles
-MediaTempFiles
+# media files
+MediaFiles/PostFiles/*
+MediaFiles/ProfileFiles/*
+MediaFiles/WallpaperFiles/*
+
+MediaTempFiles/PostFiles/*
+MediaTempFiles/ProfileFiles/*
+MediaTempFiles/WallpaperFiles/*
 
 # Logs
 logs
