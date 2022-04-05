@@ -1,3 +1,7 @@
+#user
+MediaFiles
+MediaTempFiles
+
 # Logs
 logs
 *.log
