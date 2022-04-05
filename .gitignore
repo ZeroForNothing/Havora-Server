@@ -1,11 +1,11 @@
 # media files
-MediaFiles/PostFiles/*
-MediaFiles/ProfileFiles/*
-MediaFiles/WallpaperFiles/*
+MediaFiles/PostFiles/
+MediaFiles/ProfilePic/
+MediaFiles/WallpaperPic/
 
-MediaTempFiles/PostFiles/*
-MediaTempFiles/ProfileFiles/*
-MediaTempFiles/WallpaperFiles/*
+MediaTempFiles/PostFiles/
+MediaTempFiles/ProfilePic/
+MediaTempFiles/WallpaperPic/
 
 # Logs
 logs
