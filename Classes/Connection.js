@@ -398,6 +398,7 @@ module.exports = class Connection {
       picToken: user.picToken,
       username: user.name,
       userCode: user.code,
+      userEmail: user.email,
       settings: user.settings
     });
     socket.on('tellFriendsImOnline', function () {
@@ -727,6 +728,7 @@ module.exports = class Connection {
     })
     socket.on('deleteContent', function (data) {
       server.database.deleteContent(userID, data.postID, data.commentID, (dataD) => {
+        connection.log(`Deactivating Content with id ${data.postID ? data.postID : data.commentID}`)
         let deleteCont = {
           postID: data.postID,
           commentID: data.commentID
@@ -735,12 +737,14 @@ module.exports = class Connection {
       })
     })
     socket.on('saveContent', function (data) {
+      connection.log(`Editing Content with id ${data.postID ? data.postID : data.commentID}`)
       server.database.saveContent(userID, data.postID, data.commentID, data.text, (dataD) => {
         //make it show also on all users when edit happens
         socket.emit('saveContent', {
           answer: dataD.answer,
           postID: data.postID,
-          commentID: data.commentID
+          commentID: data.commentID,
+          text : data.text
         });
       })
     })

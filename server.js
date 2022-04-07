@@ -92,8 +92,8 @@ async function ManageFile(file ,uploadsFolder, fileName){
 
 app.post('/upload', async (req, res) => {
   let form = formidable.IncomingForm()
-  let picToken = req.session.picToken;
-  if(!picToken) res.json({ok: false, error: 'Session expired'})
+  let picToken = req.query.picToken;
+  if(!picToken) res.json({ok: false, error: 'Pictoken not found'})
 	const uploadsTempFolder = path.join(__dirname, 'MediaTempFiles', 'PostFiles' , picToken)
 	const uploadsFolder = path.join(__dirname, 'MediaFiles', 'PostFiles' , picToken)
 	form.multiples = false
@@ -129,9 +129,10 @@ app.post('/upload', async (req, res) => {
 })
 app.post('/profileUpload', async (req, res) => {
   let form = formidable.IncomingForm()
-  let picToken = req.session.picToken;
+  let picToken = req.query.picToken;
   let picType = req.query.picType;
-  if(!picToken) res.json({ok: false, error: 'Session expired'})
+  
+  if(!picToken) res.json({ok: false, error: 'Pictoken not found'})
   if(!picType || isNaN(picType)) res.json({ok: false, error: 'Picture param invalid'})
   let fileLocationNeeded = '';
   if(picType == 1) fileLocationNeeded = 'ProfilePic'; else fileLocationNeeded = 'WallpaperPic';
@@ -147,7 +148,6 @@ app.post('/profileUpload', async (req, res) => {
   fs.readdirAsync(uploadsTempFolder, (err, tempfiles) => {
       if (err) throw err;
       for (const tempfile of tempfiles) {
-        console.log(tempfile)
         fs.unlinkAsync(path.join(uploadsTempFolder, tempfile), err => {
           if (err) console.error(err);
         });
@@ -161,6 +161,10 @@ app.post('/profileUpload', async (req, res) => {
           serverLog('No file selected')
           return res.json({ok: false, error: 'No file selected'})
         }
+        if(!fields.email){
+          serverLog('NoSignin required to upload pic')
+          return res.json({ok: false, error: 'Signin required to upload pic'})
+        }
           const file = files.files
           if (!checkAcceptedExtensions(file)) return res.json({ok: false, error: 'Invalid file type'})
           const type = file.type.split('/').pop()
@@ -171,8 +175,8 @@ app.post('/profileUpload', async (req, res) => {
           else wallPicType = type;
           const fileManaged =  await ManageFile(file, uploadsFolder ,fileName)
           if(!fileManaged) res.json({ok: false, error: 'Error managing uploaded file'})
-          gameServer.database.setUserPicType(req.session.email, profPicType, wallPicType, ()=>{
-            serverLog("Uploaded image successfully of type " + picType + " , "+ type)
+          gameServer.database.setUserPicType(fields.email, profPicType, wallPicType, ()=>{
+            serverLog(`Uploaded image successfully of type ${picType == 1 ? "Profile" : "Wallpaper"} , name: file.${type}`)
             return res.json({ok: true, msg: true})
           })
       })
@@ -297,6 +301,7 @@ app.post('/LoginUser', (req, res) => {
       .output('error', sql.TinyInt)
       .execute('SignIn')
   }).then(result => {
+      if(!error) req.session.email = email;
       res.json({
         email : email,
         platform : platform,
