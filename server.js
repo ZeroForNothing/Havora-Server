@@ -45,6 +45,7 @@ const config = {
     encrypt: true
   }
 }
+
 app.use('/MediaFiles', express.static(path.join(__dirname, 'MediaFiles')))
 
 async function checkCreateUploadsFolder(uploadsFolder) {
