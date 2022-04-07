@@ -302,7 +302,6 @@ app.post('/LoginUser', (req, res) => {
       .output('error', sql.TinyInt)
       .execute('SignIn')
   }).then(result => {
-    if (!error) req.session.email = email;
     res.json({
       email: email,
       platform: platform,

@@ -3,7 +3,7 @@ var path = require('path'),
   fs = require('fs');
 const config = {
   user: 'sa',
-  password: 'gama$rade0N',
+  password: 'sa',
   server: 'localhost',
   database: 'Zero for Nothing',
   port: 1433,

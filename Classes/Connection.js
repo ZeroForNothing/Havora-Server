@@ -401,6 +401,18 @@ module.exports = class Connection {
       userEmail: user.email,
       settings: user.settings
     });
+    socket.on('registerUser',()=>{
+      socket.emit('registerUser', {
+        zeroCoin: user.zeroCoin,
+        normalCoin: user.normalCoin,
+        profilePicType: user.profilePicType,
+        picToken: user.picToken,
+        username: user.name,
+        userCode: user.code,
+        userEmail: user.email,
+        settings: user.settings
+      });
+    })
     socket.on('tellFriendsImOnline', function () {
       server.database.getFriendsList(userID, (dataD) => {
         if (dataD.friendListJson != null)
@@ -663,7 +675,8 @@ module.exports = class Connection {
           commentsList: dataD.commentsList,
           postID: postID,
           commentID: commentID,
-          page: data.page + 5
+          page: data.page + 5,
+          onlyView : data.onlyView
         });
       })
     })
