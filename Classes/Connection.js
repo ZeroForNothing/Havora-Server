@@ -363,9 +363,6 @@ module.exports = class Connection {
     let CommunityViewingPostID = null;
     let CommunityViewingCommentID = null;
 
-    let ProfilePostPage = 0;
-    let ProfileCommentPage = 1;
-    let ProfileReplyPage = 1;
     let ProfileViewingPostID = null;
     let ProfileViewingCommentID = null;
 
@@ -645,17 +642,15 @@ module.exports = class Connection {
     // socket.on('getCommunitySpecificContent', function(data) {
     //   user.getCommunitySpecificContent(data, connection, server, socket, CommunityCommentPage)
     // })
-    socket.on('getProfileTopPosts', function () {
-      user.getTopPosts(null, user.profileName, user.profileCode, connection, socket, server, ProfilePostPage, (dataD) => {
+    socket.on('getProfileTopPosts', function (data) {
+      user.getTopPosts(null, user.profileName, user.profileCode, connection, socket, server, data.page, (dataD) => {
         socket.emit('getProfileTopPosts', {
           postsList: dataD.postsList,
-          startPage: ProfilePostPage
+          page: data.page + 5
         });
-        ProfilePostPage = ProfilePostPage + 5;
       })
     })
     socket.on('getProfileTopComments', function (data) {
-      console.log(data)
       if (data.contentID == null || isNaN(data.contentID)) return;
       if (data.page == null || isNaN(data.page)) return;
       if (data.itsComment == null) return;
@@ -872,7 +867,6 @@ module.exports = class Connection {
       if (data.text == null || data.text.trim().length == 0) return;
       let postID = ProfileViewingPostID;
       let commentID = ProfileViewingCommentID;
-      console.log(userID, postID, commentID, data.text)
       server.database.createComment(userID, postID, commentID, data.text, (dataD) => {
         if (dataD.error)
           socket.emit('ShowError', {
@@ -881,11 +875,9 @@ module.exports = class Connection {
         else
           socket.emit('createProfileComment', {
             id: dataD.returnCommentID,
-            text: data.text
+            text: data.text,
+            date : dataD.commentDate
           });
-          console.log({
-            dataD
-          })
       })
     })
     socket.on('createCommunityComment', function (data) {
@@ -1054,14 +1046,13 @@ module.exports = class Connection {
         checker = true;
       }
       if (checker) {
-        ProfilePostPage = 1;
+        let ProfilePostPage = 1;
         user.ShowProfile(username, userCode, connection, socket, server);
         user.getTopPosts(null, username, userCode, connection, socket, server, ProfilePostPage, (dataD) => {
           socket.emit('getProfileTopPosts', {
             postsList: dataD.postsList,
-            startPage: ProfilePostPage
+            page: ProfilePostPage + 5
           });
-          ProfilePostPage = ProfilePostPage + 5;
         });
         WINDOW = "Profile";
         socket.emit('OpenWindow', {
@@ -1093,17 +1084,14 @@ module.exports = class Connection {
       } else if (data.window == "AccountLink") {
         user.GetAccountLink(connection, server, socket);
       } else if (data.window == "Profile") {
-        if (ProfilePostPage == 0) {
-          ProfilePostPage = 1;
+          let ProfilePostPage = 1;
           user.ShowProfile(user.name, user.code, connection, socket, server);
           user.getTopPosts(null, user.name, user.code, connection, socket, server, ProfilePostPage, (dataD) => {
             socket.emit('getProfileTopPosts', {
               postsList: dataD.postsList,
-              startPage: ProfilePostPage
+              page: ProfilePostPage + 5
             });
-            ProfilePostPage = ProfilePostPage + 5;
           });
-        }
       } else if (data.window == "Community") {
         if (CommunityPostPage == 0) {
           CommunityCurrentCategory = data.categoryID;
