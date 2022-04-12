@@ -32,8 +32,6 @@ module.exports = class Connection {
     connection.clanLobby = null;
     connection.groupLobby = null; //[];
 
-    connection.CreatingPostForUserID = null;
-
     connection.server = server;
     connection.player = new Player();
     connection.user = new User(data.correctUsername, data.userCode, data.email, data.picToken, data.profilePicType, data.wallpaperPicType, data.newAcc, data.zeroCoin, data.normalCoin, data.experience, data.settings);
@@ -356,8 +354,7 @@ module.exports = class Connection {
   }
   createSocialEvents(platform) {
     let WINDOW = "Home";
-    let CommunityCurrentCategory = null;
-    let CommunityPostPage = 0;
+
     let CommunityCommentPage = 1;
     let CommunityReplyPage = 1;
     let CommunityViewingPostID = null;
@@ -370,6 +367,7 @@ module.exports = class Connection {
     let ChatingWithUserID = null;
     let ChatingWithUserName = null;
     let ChatingWithUserCode = null;
+    let CreatingPostForUser = null;
 
     let connection = this;
     let userID = connection.id;
@@ -643,7 +641,7 @@ module.exports = class Connection {
     //   user.getCommunitySpecificContent(data, connection, server, socket, CommunityCommentPage)
     // })
     socket.on('getProfileTopPosts', function (data) {
-      user.getTopPosts(null, user.profileName, user.profileCode, connection, socket, server, data.page, (dataD) => {
+      user.getTopPosts(null, data.profileName, data.profileCode, connection, socket, server, data.page, (dataD) => {
         socket.emit('getProfileTopPosts', {
           postsList: dataD.postsList,
           page: data.page + 5
@@ -676,15 +674,10 @@ module.exports = class Connection {
       })
     })
     socket.on('getCommunityTopPosts', function (data) {
-      if (data != null)
-        if (CommunityCurrentCategory != data.categoryID && !isNaN(data.categoryID)) {
-          CommunityCurrentCategory = data.categoryID
-          CommunityPostPage = 1
-        }
-      user.getTopPosts(CommunityCurrentCategory, null, null, connection, socket, server, CommunityPostPage, (dataD) => {
-        CommunityPostPage = CommunityPostPage + 5;
+      user.getTopPosts(data.categoryID, null, null, connection, socket, server, data.page, (dataD) => {
         socket.emit('getCommunityTopPosts', {
-          postsList: dataD.postsList
+          postsList: dataD.postsList,
+          page : data.page + 5
         });
       })
     })
@@ -766,6 +759,13 @@ module.exports = class Connection {
         window: "Home"
       });
     })
+    socket.on('fetchPostType',()=>{
+      socket.emit('fetchPostType',{
+        type : CreatingPostForUser.type,
+        name : CreatingPostForUser.name,        
+        code : CreatingPostForUser.code        
+      })
+    })
     socket.on('startCreatingPost', function (data) {
       if (data.type == 1 || data.type == 2 || data.type == 3) {
         let directory = './MediaTempFiles/PostFiles/' + user.picToken;
@@ -777,29 +777,29 @@ module.exports = class Connection {
             });
           }
           if (data.type == 1) {
-            connection.CreatingPostForUserID = userID;
-            socket.emit('startCreatingPost', {
-              type: 1
-            });
+            CreatingPostForUser = {
+              type : 1,
+              id : userID
+            };
           } else if (data.type == 2) {
-            connection.CreatingPostForUserID = null;
-            socket.emit('startCreatingPost', {
-              type: 2
-            });
+            CreatingPostForUser = {
+              type : 2,
+              id : null
+            };
           } else if (data.type == 3 && data.userCode != null && !isNaN(data.userCode) && data.username != null && data.username.trim().length != 0) {
             server.database.searchForUser(userID, data.username, data.userCode, (dataD) => {
               if (dataD.friendID != null) {
-                connection.CreatingPostForUserID = dataD.friendID;
-                socket.emit('startCreatingPost', {
-                  type: 3,
-                  username: dataD.userCorrectName,
-                  userCode: dataD.friendCode,
-                  picToken: dataD.picToken,
-                  picType: dataD.picType
-                });
+                CreatingPostForUser = {
+                  type : 3,
+                  id :  dataD.friendID,
+                  name : dataD.userCorrectName,
+                  code : friendCode,
+                  picToken : dataD.picToken,
+                  picType : dataD.picType
+                };
               } else {
                 socket.emit('ShowError', {
-                  error: "Error creating post for user " + data.username.trim() + "#" + data.userCode.trim()
+                  error: "User " + data.username.trim() + "#" + data.userCode.trim() + " either not in your friendlist or doesn't exist"
                 });
               }
             })
@@ -809,6 +809,9 @@ module.exports = class Connection {
               error: "Error selecting post type"
             });
           }
+          socket.emit('OpenWindow', {
+            window: "Post"
+          });
         })
       } else {
         socket.emit('ShowError', {
@@ -837,19 +840,22 @@ module.exports = class Connection {
       folderName = folderName.replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
       let directory = './MediaFiles/PostFiles/' + user.picToken + '/' + folderName;
       fs.mkdirAsync(directory);
-
-      server.database.createPost(userID, connection.CreatingPostForUserID, postCategoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
+      connection.log("Creating post")
+      server.database.createPost(userID, CreatingPostForUser.id, postCategoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
         if (dataD.error == null) {
-
-          if (tempPostFiles != null && tempPostFiles.length > 0)
+          
+          if (tempPostFiles != null && tempPostFiles.length > 0){
+            connection.log("Moving post files")
             tempPostFiles.forEach(function (value) {
               fs.renameAsync(tempDirectory + '/' + value, directory + '/' + value, function (err) {
                 if (err) connection.log('ERROR: ' + err);
+                connection.log(`File: ${value}`)
               });
             })
+          }
 
-          if (connection.CreatingPostForUserID == connection.id) WINDOW = "Profile"
-          else if (connection.CreatingPostForUserID == null) WINDOW = "Community"
+          if (CreatingPostForUser.id == connection.id) WINDOW = "Profile"
+          else if (CreatingPostForUser.id == null) WINDOW = "Community"
           else WINDOW = "Home"
 
           socket.emit('OpenWindow', {
@@ -857,10 +863,27 @@ module.exports = class Connection {
           });
           connection.log("Post created successfully")
         }
-        else
+        else{
+          let text = '';
+          if (dataD.error == 1) {
+            text = "Must select a category";
+          } else if (dataD.error == 2) {
+            text = "Must insert a title";
+          } else if (data.error == 3) {
+            text = "Must insert an explanation text"
+          } else if (data.error == 4) {
+            text = "Youtube url entered is not valid";
+          } else if (data.error == 5) {
+            text = "Must wait for video to finish uploading";
+          } else if (data.error == 6) {
+            text = "Must wait for image to finish uploading";
+          } else {
+            text = "Encountered while posting. Try refreshing the page";
+          }
           socket.emit('ShowError', {
-            error: "Error creating post with code " + dataD.error
+            error: `Error (Create Post / ${dataD.error}): ${text}`
           });
+        }
       })
     })
     socket.on('createProfileComment', function (data) {
@@ -876,7 +899,8 @@ module.exports = class Connection {
           socket.emit('createProfileComment', {
             id: dataD.returnCommentID,
             text: data.text,
-            date : dataD.commentDate
+            date : dataD.commentDate,
+            itsComment : ProfileViewingCommentID ? false : true
           });
       })
     })
@@ -1012,7 +1036,7 @@ module.exports = class Connection {
       })
     })
     socket.on('editProfileInfo', function (data) {
-      server.database.editProfileInfo(userID, data.firstname, data.lastname, data.gender, data.birthDate, (dataD) => {
+      server.database.editProfileInfo(userID, data.firstName, data.lastName, data.gender, data.date, (dataD) => {
         socket.emit('editProfileInfo', {
           error: dataD.error
         });
@@ -1046,22 +1070,17 @@ module.exports = class Connection {
         checker = true;
       }
       if (checker) {
-        let ProfilePostPage = 1;
-        user.ShowProfile(username, userCode, connection, socket, server);
-        user.getTopPosts(null, username, userCode, connection, socket, server, ProfilePostPage, (dataD) => {
-          socket.emit('getProfileTopPosts', {
-            postsList: dataD.postsList,
-            page: ProfilePostPage + 5
+        if(WINDOW != "Profile"){
+          WINDOW = "Profile";
+          socket.emit('OpenWindow', {
+            window: WINDOW
           });
-        });
-        WINDOW = "Profile";
-        socket.emit('OpenWindow', {
-          window: WINDOW
-        });
+        }
+        user.ShowProfile(username, userCode, connection, socket, server);
       }
     })
     socket.on('editPassword', function (data) {
-      server.database.editPassword(userID, data.oldpassword, data.confpassword, data.newpassword, (dataD) => {
+      server.database.editPassword(userID, data.oldPassword, data.confPassword, data.newPassword, (dataD) => {
         socket.emit('editPassword', dataD.error);
       })
     })
@@ -1083,26 +1102,17 @@ module.exports = class Connection {
         })
       } else if (data.window == "AccountLink") {
         user.GetAccountLink(connection, server, socket);
-      } else if (data.window == "Profile") {
-          let ProfilePostPage = 1;
-          user.ShowProfile(user.name, user.code, connection, socket, server);
-          user.getTopPosts(null, user.name, user.code, connection, socket, server, ProfilePostPage, (dataD) => {
-            socket.emit('getProfileTopPosts', {
-              postsList: dataD.postsList,
-              page: ProfilePostPage + 5
-            });
-          });
-      } else if (data.window == "Community") {
-        if (CommunityPostPage == 0) {
-          CommunityCurrentCategory = data.categoryID;
-          CommunityPostPage = 1;
-          user.getTopPosts(CommunityCurrentCategory, null, null, connection, socket, server, CommunityPostPage, (dataD) => {
-            CommunityPostPage = CommunityPostPage + 5;
+      } 
+      // else if (data.window == "Profile") {
+      //   user.ShowProfile(user.name, user.code, connection, socket, server);
+      // }
+       else if (data.window == "Community") {
+          user.getTopPosts(data.categoryID, null, null, connection, socket, server, 1, (dataD) => {
             socket.emit('getCommunityTopPosts', {
-              postsList: dataD.postsList
+              postsList: dataD.postsList,
+              page : 6
             });
           })
-        }
       }
       connection.log("Showing " + WINDOW + " Tab")
     })

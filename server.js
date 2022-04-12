@@ -4,6 +4,9 @@ const express = require('express')
 const session = require('express-session')
 const formidable = require('formidable');
 const bluebird = require('bluebird')
+let {
+  nanoid
+} = require('nanoid')
 const app = express()
 app.use(express.json())
 app.use(session({
@@ -47,6 +50,8 @@ const config = {
 }
 
 app.use('/MediaFiles', express.static(path.join(__dirname, 'MediaFiles')))
+console.log(__dirname + '/MediaFiles')
+//app.use(express.static(__dirname + '/MediaFiles/'))
 
 async function checkCreateUploadsFolder(uploadsFolder) {
   try {
@@ -121,10 +126,11 @@ app.post('/upload', async (req, res) => {
     const file = files.files
     if (!checkAcceptedExtensions(file)) return res.json({ ok: false, error: 'Invalid file type' })
 
-    // const fileName = encodeURIComponent(file.name.replace(/&. *;+/g, '-'))
-    // const fileManaged =  await ManageFile(file, uploadsFolder ,fileName)
-    // if(!fileManaged) res.json({ok: false, error: 'Error uploading the file'})
-
+    const type = file.type.split('/').pop()
+    const fileName = nanoid() + "." + type
+    const fileManaged =  await ManageFile(file, uploadsTempFolder ,fileName)
+    if(!fileManaged) res.json({ok: false, error: 'Error uploading the file'})
+    serverLog('Successfully upload file to temp')
     return res.json({ ok: true, msg: true })
   })
 })

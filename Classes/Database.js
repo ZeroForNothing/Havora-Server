@@ -613,8 +613,6 @@ module.exports = class Database {
         .output('commentsList', sql.NVarChar(sql.MAX))
         .execute('getTopComments')
     }).then(result => {
-      console.log(userID, postID, commentID, startPage)
-      console.log(result.output)
       callback(result.output)
     }).catch(err => {
       // ... error checks
