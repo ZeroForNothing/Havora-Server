@@ -32,18 +32,7 @@ module.exports = class User {
       experience: this.experience
     }
   }
-  getTopPosts(categoryID, profileName, profileCode, connection, socket, server, startpage, callback) {
-    let user = this;
-    server.database.getTopPosts(connection.id, categoryID, profileName, profileCode, startpage, (dataD) => {
-      callback(dataD)
-    })
-  }
-  getTopComments(postID, commentID, connection, socket, server, startpage, callback) {
-    let user = this;
-    server.database.getTopComments(connection.id, postID, commentID, startpage, (dataD) => {
-      callback(dataD);
-    })
-  }
+
   GetAccountLink(connection, server, socket) {
     let user = this;
     server.database.getAccountLinks(connection.id, (dataD) => {

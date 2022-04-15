@@ -40,12 +40,10 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output);
     })
-    // .catch(err => {
-    //   // ... error checks
-    //   console.log("Database error at 1 : " + err);
-    //   if (err == "ConnectionError: Connection lost - socket hang up")
-    //     console.log("Got it!!!")
-    // })
+    .catch(err => {
+      // ... error checks
+      console.log("server 1 cought error at 1: " + err);
+    })
   }
   getUserProfile(userID, friendname, userCode, callback) {
     sql.connect(config).then(pool => {
@@ -157,7 +155,7 @@ module.exports = class Database {
     }).then((result) => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 10: " + err);
+      console.log("Database cought error at 9: " + err);
     })
   }
   editMsg(userID, textID, message, callback) {
@@ -170,7 +168,7 @@ module.exports = class Database {
     }).then(() => {
       callback()
     }).catch(err => {
-      console.log("Database cought error at 12: " + err);
+      console.log("Database cought error at 10: " + err);
     })
   }
   getFriendRequest(userID, callback) {
@@ -182,7 +180,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 13: " + err);
+      console.log("Database cought error at 11: " + err);
     })
   }
   userSignIn(email, password, platform, socket) {
@@ -209,7 +207,7 @@ module.exports = class Database {
       });
     }).catch(err => {
       // ... error checks
-      console.log("server 1 cought error at 44: " + err);
+      console.log("server 1 cought error at 12: " + err);
     })
 
   }
@@ -232,7 +230,7 @@ module.exports = class Database {
       }
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 15: " + err);
+      console.log("Database cought error at 13: " + err);
     })
   }
   saveMsg(userID, friendID, message, callback) {
@@ -247,7 +245,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 17: " + err);
+      console.log("Database cought error at 14: " + err);
     })
   }
   showChatHistory(userID, friendName, userCode, currentfriendID, startPage, callback) {
@@ -264,7 +262,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 18: " + err);
+      console.log("Database cought error at 15: " + err);
     })
   }
   deleteMsg(userID, textID, callback) {
@@ -276,7 +274,7 @@ module.exports = class Database {
     }).then(() => {
       callback()
     }).catch(err => {
-      console.log("Database cought error at 19: " + err);
+      console.log("Database cought error at 16: " + err);
     })
   }
   msgsRecieved(userID, friendID, callback) {
@@ -288,7 +286,7 @@ module.exports = class Database {
     }).then(() => {
       callback()
     }).catch(err => {
-      console.log("Database cought error at 20: " + err);
+      console.log("Database cought error at 17: " + err);
     })
   }
   manageFriendRequest(userID, friendID, callback) {
@@ -301,7 +299,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 21: " + err);
+      console.log("Database cought error at 18: " + err);
     })
   }
   unlinkAccountLinks(userID, username, userCode, callback) {
@@ -315,7 +313,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 22: " + err);
+      console.log("Database cought error at 19: " + err);
     })
   }
   GainCoinAndExperience(userID, normalCoinAmount, experienceAmount, callback) {
@@ -330,7 +328,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 23: " + err);
+      console.log("Database cought error at 20: " + err);
     })
   }
   getAccountLinks(userID, callback) {
@@ -344,7 +342,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 24: " + err);
+      console.log("Database cought error at 21: " + err);
     })
   }
   setAccountLinks(userID, email, password, callback) {
@@ -360,7 +358,7 @@ module.exports = class Database {
     }).then(result => {
       callback(result.output)
     }).catch(err => {
-      console.log("Database cought error at 25: " + err);
+      console.log("Database cought error at 22: " + err);
     })
   }
   accessAccountLinks(userID, username, userCode, platform, callback) {
@@ -376,7 +374,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 26: " + err);
+      console.log("Database cought error at 23: " + err);
     })
   }
   unFriendRelation(userID, friendID, callback) {
@@ -386,7 +384,7 @@ module.exports = class Database {
         .input('friendID', sql.BigInt, friendID)
         .execute('unFriendRelation')
     }).catch(err => {
-      console.log("Database cought error at 27: " + err);
+      console.log("Database cought error at 24: " + err);
     })
   }
   getSkins(search, category, option, callback) {
@@ -401,7 +399,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 28: " + err);
+      console.log("Database cought error at 25: " + err);
     })
   }
   getClassList(classID, callback) {
@@ -414,7 +412,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 28: " + err);
+      console.log("Database cought error at 26: " + err);
     })
   }
   createComment(userID, postID, commentID, text, callback) {
@@ -432,7 +430,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 29: " + err);
+      console.log("Database cought error at 27: " + err);
     })
   }
   saveContent(userID, postID, commentID, text, callback) {
@@ -448,7 +446,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 31: " + err);
+      console.log("Database cought error at 28: " + err);
     })
   }
   getSpecificContent(userID, postID, commentID, callback) {
@@ -463,7 +461,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 32: " + err);
+      console.log("Database cought error at 29: " + err);
     })
   }
   setUserOpinion(userID, postID, commentID, opinion, callback) {
@@ -481,7 +479,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 33: " + err);
+      console.log("Database cought error at 30: " + err);
     })
   }
   userDisconnected(userID, platform) {
@@ -492,7 +490,7 @@ module.exports = class Database {
         .execute('userDisconnected')
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 34: " + err);
+      console.log("Database cought error at 31: " + err);
     })
   }
   searchForUser(userID, username, userCode, callback) {
@@ -511,7 +509,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 35: " + err);
+      console.log("Database cought error at 32: " + err);
     })
   }
   editProfileInfo(userID, firstname, lastname, gender, birthDate, callback) {
@@ -528,7 +526,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 36: " + err);
+      console.log("Database cought error at 33: " + err);
     })
   }
 
@@ -548,7 +546,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 37: " + err);
+      console.log("Database cought error at 34: " + err);
     })
   }
   editPassword(userID, oldpassword, confpassword, newpassword, callback) {
@@ -564,7 +562,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 38: " + err);
+      console.log("Database cought error at 35: " + err);
     })
   }
   SetGameSound(userID, sound) {
@@ -575,7 +573,7 @@ module.exports = class Database {
         .execute('SetGameSound')
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 38: " + err);
+      console.log("Database cought error at 36: " + err);
     })
   }
   SetGameThemeColor(userID, color) {
@@ -586,7 +584,7 @@ module.exports = class Database {
         .execute('SetGameThemeColor')
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 38: " + err);
+      console.log("Database cought error at 37: " + err);
     })
   }
   deleteContent(userID, postID, commentID, callback) {
@@ -600,7 +598,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 39: " + err);
+      console.log("Database cought error at 38: " + err);
     })
   }
   getTopComments(userID, postID, commentID, startPage, callback) {
@@ -616,7 +614,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 40: " + err);
+      console.log("Database cought error at 39: " + err);
     })
   }
   getTopPosts(userID, categoryID, username, userCode, startPage, callback) {
@@ -624,17 +622,18 @@ module.exports = class Database {
       // Stored procedure
       return pool.request()
         .input('viewerUserID', sql.BigInt, userID)
-        .input('categoryID', sql.TinyInt, categoryID)
+        .input('categoryID', sql.Int, categoryID)
         .input('username', sql.VarChar(50), username)
         .input('userCode', sql.Int, userCode)
         .input('startPage', sql.Int, startPage)
+        .output('categoryName', sql.NVarChar(50))
         .output('postsList', sql.NVarChar(sql.MAX))
         .execute('getTopPosts')
     }).then(result => {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("Database cought error at 41: " + err);
+      console.log("Database cought error at 40: " + err);
     })
   }
   createUser(data, callback) {
@@ -671,7 +670,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch(err => {
       // ... error checks
-      console.log("server 1 cought error at 42: " + err);
+      console.log("server 1 cought error at 41: " + err);
     })
   }
   createPost(userID, toUserID, categoryType, title, text, url, mediaFiles, mediaFolder, callback) {
@@ -679,7 +678,7 @@ module.exports = class Database {
       return pool.request()
         .input('fromUserID', sql.BigInt, userID)
         .input('toUserID', sql.BigInt, toUserID)
-        .input('categoryType', sql.TinyInt, categoryType)
+        .input('categoryTypeID', sql.Int, categoryType)
         .input('title', sql.NVarChar(150), title)
         .input('text', sql.NVarChar(sql.MAX), text)
         .input('url', sql.NVarChar(250), url)
@@ -688,6 +687,20 @@ module.exports = class Database {
         .output('postID', sql.BigInt)
         .output('error', sql.tinyInt)
         .execute('createPost')
+    }).then(result => {
+      callback(result.output)
+    }).catch(err => {
+      // ... error checks
+      console.log("Database cought error at 42: " + err);
+    })
+  }
+  getCategoryList(categoryName, callback) {
+    sql.connect(config).then(pool => {
+      return pool.request()
+        .input('categoryName', sql.NVarChar(50) , categoryName)
+        .output('categoryList', sql.NVarChar(sql.MAX))
+        .output('categorySuggestionList', sql.NVarChar(sql.MAX))
+        .execute('getCategoryList')
     }).then(result => {
       callback(result.output)
     }).catch(err => {

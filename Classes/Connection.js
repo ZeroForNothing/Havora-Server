@@ -355,13 +355,8 @@ module.exports = class Connection {
   createSocialEvents(platform) {
     let WINDOW = "Home";
 
-    let CommunityCommentPage = 1;
-    let CommunityReplyPage = 1;
-    let CommunityViewingPostID = null;
-    let CommunityViewingCommentID = null;
-
-    let ProfileViewingPostID = null;
-    let ProfileViewingCommentID = null;
+    let ViewingPostID = null;
+    let ViewingCommentID = null;
 
     let ChatPage = 1;
     let ChatingWithUserID = null;
@@ -634,21 +629,33 @@ module.exports = class Connection {
       socket.emit('getClassList', classData);
     })
 
-    // socket.on('getProfileSpecificContent', function(data) {
-    //   user.getProfileSpecificContent(data, connection, server, socket, ProfileCommentPage)
+    // socket.on('getSpecificContent', function(data) {
+    //   user.getSpecificContent(data, connection, server, socket, CommentPage)
     // })
-    // socket.on('getCommunitySpecificContent', function(data) {
-    //   user.getCommunitySpecificContent(data, connection, server, socket, CommunityCommentPage)
-    // })
-    socket.on('getProfileTopPosts', function (data) {
-      user.getTopPosts(null, data.profileName, data.profileCode, connection, socket, server, data.page, (dataD) => {
-        socket.emit('getProfileTopPosts', {
+    socket.on('getTopPosts', function (data) {
+      connection.log(`Fetching posts for ${data.categoryID != 1 ? "Community" : "Profile"}`)
+      server.database.getTopPosts(connection.id,data.categoryID, data.name, data.code, data.page, (dataD) => {
+        socket.emit('getCategoryName',{
+          categoryName : dataD.categoryName
+        })
+        socket.emit('getTopPosts', {
+          currentCategoryID : data.categoryID,
           postsList: dataD.postsList,
           page: data.page + 5
         });
       })
     })
-    socket.on('getProfileTopComments', function (data) {
+    socket.on('getCategoryList', function (data) {
+      let categoryName = data.categoryName;
+      if(categoryName.trim().length === 0) return;
+      server.database.getCategoryList(categoryName,(dataD) => {
+        socket.emit('getCategoryList', {
+          categoryList: dataD.categoryList,
+          categorySuggestionList : dataD.categorySuggestionList
+        });
+      })
+    })
+    socket.on('getTopComments', function (data) {
       if (data.contentID == null || isNaN(data.contentID)) return;
       if (data.page == null || isNaN(data.page)) return;
       if (data.itsComment == null) return;
@@ -656,15 +663,15 @@ module.exports = class Connection {
       let commentID = null
       if (data.itsComment) {
         postID = data.contentID
-        ProfileViewingPostID = postID
+        ViewingPostID = postID
       }
       else {
         commentID = data.contentID
-        ProfileViewingCommentID = commentID
+        ViewingCommentID = commentID
       }
-
-      user.getTopComments(postID, commentID, connection, socket, server, data.page, (dataD) => {
-        socket.emit('getProfileTopComments', {
+      connection.log(`Fetching comments for ${postID ? "Post" : "Comment"} with id: ${postID ? postID : commentID}`)
+      server.database.getTopComments(connection.id,postID, commentID, data.page, (dataD) => {
+        socket.emit('getTopComments', {
           commentsList: dataD.commentsList,
           postID: postID,
           commentID: commentID,
@@ -673,48 +680,7 @@ module.exports = class Connection {
         });
       })
     })
-    socket.on('getCommunityTopPosts', function (data) {
-      user.getTopPosts(data.categoryID, null, null, connection, socket, server, data.page, (dataD) => {
-        socket.emit('getCommunityTopPosts', {
-          postsList: dataD.postsList,
-          page : data.page + 5
-        });
-      })
-    })
-    socket.on('getCommunityTopComments', function (data) {
-      if (data != null) {
-        if (data.postID != null)
-          if (!isNaN(data.postID)) {
-            CommunityViewingPostID = data.postID;
-            CommunityCommentPage = 1;
-          }
-      }
-      if (CommunityViewingPostID == null) return;
-      user.getTopComments(CommunityViewingPostID, null, connection, socket, server, CommunityCommentPage, (dataD) => {
-        CommunityCommentPage = CommunityCommentPage + 5;
-        socket.emit('getCommunityTopComments', {
-          commentsList: dataD.commentsList,
-          postID: true
-        });
-      })
-    })
-    socket.on('getCommunityTopReplies', function (data) {
-      if (data != null) {
-        if (data.commentID != null)
-          if (!isNaN(data.commentID)) {
-            CommunityViewingCommentID = data.commentID;
-            CommunityCommentPage = 1;
-          }
-      }
-      if (CommunityViewingCommentID == null) return;
-      user.getTopComments(null, CommunityViewingCommentID, connection, socket, server, CommunityReplyPage, (dataD) => {
-        CommunityReplyPage = CommunityReplyPage + 5;
-        socket.emit('getCommunityTopComments', {
-          commentsList: dataD.commentsList,
-          postID: null
-        });
-      })
-    })
+
     socket.on('setUserOpinion', function (data) {
       server.database.setUserOpinion(userID, data.postID, data.commentID, data.opinion, (dataD) => {
         socket.emit('setUserOpinion', {
@@ -755,8 +721,15 @@ module.exports = class Connection {
     // })
     socket.on('discardPost', function () {
       WINDOW = "Home"
+      if (CreatingPostForUser.type == 1) {
+        WINDOW = "Profile"
+      } else if (CreatingPostForUser.type == 2) {
+        WINDOW = "Community"
+      }else if(CreatingPostForUser.type == 3) {
+        WINDOW = "Profile"
+      }
       socket.emit('OpenWindow', {
-        window: "Home"
+        window: WINDOW
       });
     })
     socket.on('fetchPostType',()=>{
@@ -821,9 +794,9 @@ module.exports = class Connection {
     })
     socket.on('createPost', async function (data) {
       let postText = data.text;
-      let postTitle = data.title;
       let postUrl = data.url;
-      let postCategoryType = data.categoryType;
+      let postTitle = data.title;
+      let categoryType = data.categoryType;
       if (postText && postText.trim().length != 0) postText = postText.trim()
       else return
 
@@ -833,15 +806,17 @@ module.exports = class Connection {
       if (postTitle && postTitle.trim().length != 0) postTitle = postTitle.trim()
       else postTitle = null
 
+      if(!categoryType) return;
+
       let tempDirectory = './MediaTempFiles/PostFiles/' + user.picToken;
       const tempPostFiles = await fs.promises.readdir(tempDirectory);
-
       let folderName = "MediaFolder_" + (new Date()).toUTCString();
       folderName = folderName.replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
       let directory = './MediaFiles/PostFiles/' + user.picToken + '/' + folderName;
       fs.mkdirAsync(directory);
-      connection.log("Creating post")
-      server.database.createPost(userID, CreatingPostForUser.id, postCategoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
+
+      connection.log("Creating post type "+categoryType)
+      server.database.createPost(userID, CreatingPostForUser.id, categoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
         if (dataD.error == null) {
           
           if (tempPostFiles != null && tempPostFiles.length > 0){
@@ -856,7 +831,7 @@ module.exports = class Connection {
 
           if (CreatingPostForUser.id == connection.id) WINDOW = "Profile"
           else if (CreatingPostForUser.id == null) WINDOW = "Community"
-          else WINDOW = "Home"
+          else WINDOW = "Profile"
 
           socket.emit('OpenWindow', {
             window: WINDOW
@@ -886,36 +861,22 @@ module.exports = class Connection {
         }
       })
     })
-    socket.on('createProfileComment', function (data) {
+    socket.on('createComment', function (data) {
       if (data.text == null || data.text.trim().length == 0) return;
-      let postID = ProfileViewingPostID;
-      let commentID = ProfileViewingCommentID;
+      let postID = ViewingPostID;
+      let commentID = ViewingCommentID;
       server.database.createComment(userID, postID, commentID, data.text, (dataD) => {
         if (dataD.error)
           socket.emit('ShowError', {
             error: "Error creating comment with code " + dataD.error
           })
         else
-          socket.emit('createProfileComment', {
+          socket.emit('createComment', {
             id: dataD.returnCommentID,
             text: data.text,
             date : dataD.commentDate,
-            itsComment : ProfileViewingCommentID ? false : true
+            itsComment : ViewingCommentID ? false : true
           });
-      })
-    })
-    socket.on('createCommunityComment', function (data) {
-      if (data.text == null || data.text.trim().length == 0) return;
-      let postID = null;
-      let commentID = null;
-      // postID = CommunityViewingPostID;
-      // commentID = CommunityViewingCommentID;
-      server.database.createComment(userID, postID, commentID, data.text, (dataD) => {
-        socket.emit('createCommunityComment', {
-          error: dataD.error,
-          id: dataD.returnCommentID,
-          text: data.text
-        });
       })
     })
     socket.on('friendRequestAnswer', function (data) {
@@ -1103,17 +1064,6 @@ module.exports = class Connection {
       } else if (data.window == "AccountLink") {
         user.GetAccountLink(connection, server, socket);
       } 
-      // else if (data.window == "Profile") {
-      //   user.ShowProfile(user.name, user.code, connection, socket, server);
-      // }
-       else if (data.window == "Community") {
-          user.getTopPosts(data.categoryID, null, null, connection, socket, server, 1, (dataD) => {
-            socket.emit('getCommunityTopPosts', {
-              postsList: dataD.postsList,
-              page : 6
-            });
-          })
-      }
       connection.log("Showing " + WINDOW + " Tab")
     })
 
