@@ -240,7 +240,7 @@ app.post('/CreateUser', (req, res) => {
   else if (password.trim() !== confPassword.trim()) {
     errorLog = "Password confirmation doesn't match";
   }
-  else if (gender.trim().length == 0) {
+  else if (gender != 0 && gender != 1) {
     errorLog = "Pick a gender";
   }
   else if (date.trim().length == 0) {

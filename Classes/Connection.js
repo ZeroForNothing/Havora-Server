@@ -1017,28 +1017,19 @@ module.exports = class Connection {
       })
     })
     socket.on('showUserProfile', (data) => {
-      let checker = false;
-      let username = null;
-      let userCode = null;
-      if (data == null) {
-        username = user.name;
-        userCode = user.code
-        checker = true;
-      } else {
-        if (data.username == null || isNaN(data.userCode) || data.username.length > 50) return;
+      console.log(data)
+      let username = user.name;
+      let userCode = user.code;
+      if(data && data.username && data.userCode && !isNaN(data.userCode) && data.username.length != 0 && data.username.length < 50){
         username = data.username;
         userCode = data.userCode;
-        checker = true;
       }
-      if (checker) {
-        if(WINDOW != "Profile"){
-          WINDOW = "Profile";
-          socket.emit('OpenWindow', {
-            window: WINDOW
-          });
-        }
-        user.ShowProfile(username, userCode, connection, socket, server);
+      if(WINDOW != "Profile"){
+        WINDOW = "Profile";
+        socket.emit('OpenWindow', { window: WINDOW });
       }
+      user.ShowProfile(username, userCode, connection, socket, server);
+      
     })
     socket.on('editPassword', function (data) {
       server.database.editPassword(userID, data.oldPassword, data.confPassword, data.newPassword, (dataD) => {
