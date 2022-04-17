@@ -55,7 +55,6 @@ module.exports = class Database {
         .output('picToken', sql.NVarChar(250))
         .output('profilePicType', sql.NVarChar(5))
         .output('wallpaperPicType', sql.NVarChar(5))
-        .output('myRequest', sql.TinyInt)
         .output('friendRequest', sql.TinyInt)
         .output('friendID', sql.BigInt)
         .execute('getUserProfile')

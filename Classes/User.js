@@ -1,5 +1,3 @@
-var path = require('path'),
-  fs = require('fs');
 module.exports = class User {
   constructor(name, code, email, picToken, picTokenType, wallpaperPicType, newAcc, zeroCoin, normalCoin, experience, settings) {
     this.name = name;
@@ -14,10 +12,6 @@ module.exports = class User {
     this.experience = experience;
     this.friendList = [];
     this.settings = settings;
-    //////////////////////////////////////////////////// profile and community
-    this.profileID = null;
-    this.profileName = null;
-    this.profileCode = null;
   }
   ToJson(id) {
     return {
@@ -43,41 +37,6 @@ module.exports = class User {
         username: user.name
       });
     })
-  }
-
-  ShowProfile(username, userCode, connection, socket, server) {
-    let user = this;
-    user.profileID = null;
-    user.profileName = null;
-    user.profileCode = null;
-    if (username == user.name && userCode == user.code) {
-      socket.emit('setProfileData', {
-        viewingMyProfile: true,
-        picToken: user.picToken,
-        profilePicType: user.profilePicType,
-        wallpaperPicType: user.wallpaperPicType,
-        username: user.name,
-        userCode: user.code
-      });
-    } else {
-      server.database.getUserProfile(connection.id, username, userCode, (dataD) => {
-        if (dataD.friendID != null) {
-          this.profileID = dataD.friendID;
-          this.profileName = username;
-          this.profileCode = userCode;
-          socket.emit('setProfileData', {
-            viewingMyProfile: false,
-            myRequest: dataD.myRequest,
-            friendRequest: dataD.friendRequest,
-            picToken: dataD.picToken,
-            profilePicType: dataD.profilePicType,
-            wallpaperPicType: dataD.wallpaperPicType,
-            username: username,
-            userCode: userCode
-          });
-        }
-      })
-    }
   }
 
   getProfileSpecificContent(data, connection, server, socket, startPage) {

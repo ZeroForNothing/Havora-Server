@@ -357,6 +357,7 @@ module.exports = class Connection {
 
     let ViewingPostID = null;
     let ViewingCommentID = null;
+    let ViewingProfile = null;
 
     let ChatPage = 1;
     let ChatingWithUserID = null;
@@ -436,11 +437,12 @@ module.exports = class Connection {
     socket.on('disconnect', function () {
       server.onDisconnected(connection, platform, socket.id);
     });
-    socket.on('SignOut', function () {
-      server.database.userSignOut(userID, platform, () => {
-        socket.emit('SignOut');
-      })
-    })
+    // remove this and from database and anything related
+    // socket.on('SignOut', function () {
+    //   server.database.userSignOut(userID, platform, () => {
+    //     socket.emit('SignOut');
+    //   })
+    // })
     socket.on('closeChat', function () {
       ChatingWithUserID = null;
       ChatingWithUserName = null;
@@ -916,31 +918,28 @@ module.exports = class Connection {
         }
       })
     })
-    socket.on('manageFriendRelation', function () {
-      if (user.profileID == null || user.profileName == null || user.profileCode == null) return
-      let friendID = user.profileID;
-      let username = user.profileName;
-      let userCode = user.profileCode;
+    socket.on('manageFriendRequest', function () {
+      if (!ViewingProfile || !ViewingProfile.id || !ViewingProfile.name  || !ViewingProfile.code) return
+      if(ViewingProfile.id === connection.id) return;
+      let friendID = ViewingProfile.id;
+      let username = ViewingProfile.name;
+      let userCode = ViewingProfile.code;
+      connection.log("Managing relation with "+username)
       server.database.manageFriendRequest(userID, friendID, (dataD) => {
-        let returnData = {
-          username: username,
-          userCode: userCode
-        }
-        connection.log(dataD.requestHandler)
+
+        connection.log("Managing relation with "+username +" result "+dataD.requestHandler)
         if (dataD.requestHandler == 0) {
-          WINDOW = "Notification";
-          socket.emit('OpenWindow', {
-            window: WINDOW
-          });
-          socket.emit('respondToFriendRelation', returnData);
-        } else if (dataD.requestHandler == 1) {
-          if (friendID == ChatingWithUserID) {
-            socket.emit('closeChat')
-          }
+          //remove friend or unfriend
+          if (friendID == ChatingWithUserID) socket.emit('closeChat')
+          
           user.friendList.forEach((friend, i) => {
             if (username == friend.username && userCode == friend.userCode) {
               user.friendList.splice(i, 1)
-              connection.everySocket('unFriendRelation', returnData)
+              connection.everySocket('manageFriendRequest', {
+                username,
+                userCode,
+                relation : 0
+              })
               return;
             }
           });
@@ -953,14 +952,18 @@ module.exports = class Connection {
             friendConn.user.friendList.forEach((friend, i) => {
               if (user.name == friend.username && user.code == friend.userCode) {
                 friendConn.user.friendList.splice(i, 1)
-                friendConn.everySocket('unFriendRelation', myData)
+                friendConn.everySocket('manageFriendRequest', myData)
                 return;
               }
             });
           }
-        } else if (dataD.requestHandler == 2) {
-          //make other user have notification popup
-          connection.everySocket('addFriendRelation', returnData)
+        } else if (dataD.requestHandler == 1) {
+          //add friend
+          connection.everySocket('manageFriendRequest', {
+            username,
+            userCode,
+            relation : 1
+          })
           let friendConn = server.connections["User_" + friendID]
           if (friendConn != null) {
             let myData = {
@@ -969,21 +972,17 @@ module.exports = class Connection {
             }
             friendConn.everySocket('appendRequestToNotification', myData)
           }
-        } else if (dataD.requestHandler == 3) {
-          //remove the request form the other player who got requested
-          connection.everySocket('cancelFriendRelation', returnData)
-          let friendConn = server.connections["User_" + friendID]
-          if (friendConn != null) {
-            let myData = {
-              username: user.name,
-              userCode: user.code
-            }
-            friendConn.everySocket('cancelFriendRelation', myData)
-          }
-        }
+        }else if (dataD.requestHandler == 2) {
+          //accepted friend request
+          socket.emit('manageFriendRequest', {
+            username,
+            userCode,
+            relation : 2
+          });
+        } 
       })
     })
-    socket.on('getUserInformation', function (data) {
+    socket.on('getUserInformation', function () {
       server.database.getUserInformation(userID, (dataD) => {
         socket.emit('getUserInformation', {
           firstname: dataD.firstname,
@@ -1028,7 +1027,21 @@ module.exports = class Connection {
         WINDOW = "Profile";
         socket.emit('OpenWindow', { window: WINDOW });
       }
-      user.ShowProfile(username, userCode, connection, socket, server);
+      server.database.getUserProfile(connection.id, username, userCode, (dataD) => {
+          ViewingProfile = {
+            id : dataD.friendID,
+            name : username,
+            code : userCode,
+          };
+          socket.emit('setProfileData', {
+            friendRequest: dataD.friendRequest,
+            picToken: dataD.picToken,
+            profilePicType: dataD.profilePicType,
+            wallpaperPicType: dataD.wallpaperPicType,
+            username: username,
+            userCode: userCode
+          });
+      })
       
     })
     socket.on('editPassword', function (data) {
@@ -1037,8 +1050,8 @@ module.exports = class Connection {
       })
     })
     socket.on('OpenWindow', (data) => {
-      if (WINDOW == data.window)
-        return;
+      // if (WINDOW == data.window)
+      //   return;
       if (WINDOW === "Post" && data.window !== "Post") {
         socket.emit('promptToDiscardPost');
         return;
