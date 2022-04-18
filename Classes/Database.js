@@ -55,7 +55,7 @@ module.exports = class Database {
         .output('picToken', sql.NVarChar(250))
         .output('profilePicType', sql.NVarChar(5))
         .output('wallpaperPicType', sql.NVarChar(5))
-        .output('friendRequest', sql.TinyInt)
+        .output('friendRequest', sql.Int)
         .output('friendID', sql.BigInt)
         .execute('getUserProfile')
     }).then(result => {
@@ -288,11 +288,12 @@ module.exports = class Database {
       console.log("Database cought error at 17: " + err);
     })
   }
-  manageFriendRequest(userID, friendID, callback) {
+  manageFriendRequest(userID, friendID,response, callback) {
     sql.connect(config).then(pool => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
+        .input('response', sql.TinyInt, response)
         .output('requestHandler', sql.TinyInt)
         .execute('manageFriendRequest')
     }).then(result => {
@@ -498,11 +499,9 @@ module.exports = class Database {
         .input('currentUserID', sql.BigInt, userID)
         .input('username', sql.VarChar(50), username)
         .input('userCode', sql.Int, userCode)
-        .output('userCorrectName', sql.VarChar(50))
-        .output('friendCode', sql.Int)
         .output('friendID', sql.BigInt)
         .output('picToken', sql.VarChar(250))
-        .output('picType', sql.TinyInt)
+        .output('picType', sql.NVarChar(5))
         .execute('searchForUser')
     }).then(result => {
       callback(result.output)

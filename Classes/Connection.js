@@ -635,7 +635,7 @@ module.exports = class Connection {
     //   user.getSpecificContent(data, connection, server, socket, CommentPage)
     // })
     socket.on('getTopPosts', function (data) {
-      connection.log(`Fetching posts for ${data.categoryID != 1 ? "Community" : "Profile"}`)
+      connection.log(`Fetching posts for ${data.categoryID != 1 ? "Community" : "Profile "+data.name+"#"+data.code}`)
       server.database.getTopPosts(connection.id,data.categoryID, data.name, data.code, data.page, (dataD) => {
         socket.emit('getCategoryName',{
           categoryName : dataD.categoryName
@@ -730,6 +730,7 @@ module.exports = class Connection {
       }else if(CreatingPostForUser.type == 3) {
         WINDOW = "Profile"
       }
+      CreatingPostForUser = null;
       socket.emit('OpenWindow', {
         window: WINDOW
       });
@@ -742,6 +743,7 @@ module.exports = class Connection {
       })
     })
     socket.on('startCreatingPost', function (data) {
+      console.log(data)
       if (data.type == 1 || data.type == 2 || data.type == 3) {
         let directory = './MediaTempFiles/PostFiles/' + user.picToken;
         fs.readdirAsync(directory, (err, files) => {
@@ -756,22 +758,31 @@ module.exports = class Connection {
               type : 1,
               id : userID
             };
+            socket.emit('OpenWindow', {
+              window: "Post"
+            });
           } else if (data.type == 2) {
             CreatingPostForUser = {
               type : 2,
               id : null
             };
+            socket.emit('OpenWindow', {
+              window: "Post"
+            });
           } else if (data.type == 3 && data.userCode != null && !isNaN(data.userCode) && data.username != null && data.username.trim().length != 0) {
             server.database.searchForUser(userID, data.username, data.userCode, (dataD) => {
               if (dataD.friendID != null) {
                 CreatingPostForUser = {
                   type : 3,
                   id :  dataD.friendID,
-                  name : dataD.userCorrectName,
-                  code : friendCode,
                   picToken : dataD.picToken,
-                  picType : dataD.picType
+                  picType : dataD.picType,
+                  name : data.username,        
+                  code : data.userCode 
                 };
+                socket.emit('OpenWindow', {
+                  window: "Post"
+                });
               } else {
                 socket.emit('ShowError', {
                   error: "User " + data.username.trim() + "#" + data.userCode.trim() + " either not in your friendlist or doesn't exist"
@@ -784,9 +795,6 @@ module.exports = class Connection {
               error: "Error selecting post type"
             });
           }
-          socket.emit('OpenWindow', {
-            window: "Post"
-          });
         })
       } else {
         socket.emit('ShowError', {
@@ -795,32 +803,38 @@ module.exports = class Connection {
       }
     })
     socket.on('createPost', async function (data) {
-      let postText = data.text;
-      let postUrl = data.url;
-      let postTitle = data.title;
+      let postText = data.text && data.text.trim().length != 0 ? data.text.trim() : null;
+      let postUrl =  data.url && data.url.trim().length != 0 ? user.checkYoutubeUrl(data.url.trim()) : null;
+      let postTitle = data.title ? data.title.trim() : null;
       let categoryType = data.categoryType;
-      if (postText && postText.trim().length != 0) postText = postText.trim()
-      else return
+      let errorText = '';
 
-      if (postUrl && postUrl.trim().length != 0) postUrl = user.checkYoutubeUrl(postUrl.trim())
-      else postUrl = null
+      if(!categoryType && isNaN(categoryType)) errorText = "Must select a category";
 
-      if (postTitle && postTitle.trim().length != 0) postTitle = postTitle.trim()
-      else postTitle = null
+      if (categoryType != 1 && !postTitle && (postTitle && postTitle.trim().length == 0)) errorText = "Must insert a title";
 
-      if(!categoryType) return;
+      if (!postText) errorText = "Must insert an explanation text";
+
+      if (data.url != null) errorText = "Youtube url entered is not valid"; else postUrl = null
+
+      if(errorText.trim().length != 0){
+        socket.emit('ShowError', {
+          error: `Create Post: ${errorText}`
+        });
+        return;
+      }
 
       let tempDirectory = './MediaTempFiles/PostFiles/' + user.picToken;
       const tempPostFiles = await fs.promises.readdir(tempDirectory);
       let folderName = "MediaFolder_" + (new Date()).toUTCString();
       folderName = folderName.replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
-      let directory = './MediaFiles/PostFiles/' + user.picToken + '/' + folderName;
-      fs.mkdirAsync(directory);
-
+      
       connection.log("Creating post type "+categoryType)
       server.database.createPost(userID, CreatingPostForUser.id, categoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
         if (dataD.error == null) {
           
+          let directory = './MediaFiles/PostFiles/' + user.picToken + '/' + folderName;
+          fs.mkdirAsync(directory);
           if (tempPostFiles != null && tempPostFiles.length > 0){
             connection.log("Moving post files")
             tempPostFiles.forEach(function (value) {
@@ -918,16 +932,21 @@ module.exports = class Connection {
         }
       })
     })
-    socket.on('manageFriendRequest', function () {
+    socket.on('manageFriendRequest', function (data) {
       if (!ViewingProfile || !ViewingProfile.id || !ViewingProfile.name  || !ViewingProfile.code) return
       if(ViewingProfile.id === connection.id) return;
       let friendID = ViewingProfile.id;
       let username = ViewingProfile.name;
       let userCode = ViewingProfile.code;
-      connection.log("Managing relation with "+username)
-      server.database.manageFriendRequest(userID, friendID, (dataD) => {
+      let response = data ? data.response : null
+      server.database.manageFriendRequest(userID, friendID,response, (dataD) => {
 
-        connection.log("Managing relation with "+username +" result "+dataD.requestHandler)
+        connection.log(`Managing relation with ${username}#${userCode} result ${dataD.requestHandler}`)
+        let returnData = {
+          username,
+          userCode,
+          relation : dataD.requestHandler
+        }
         if (dataD.requestHandler == 0) {
           //remove friend or unfriend
           if (friendID == ChatingWithUserID) socket.emit('closeChat')
@@ -935,19 +954,16 @@ module.exports = class Connection {
           user.friendList.forEach((friend, i) => {
             if (username == friend.username && userCode == friend.userCode) {
               user.friendList.splice(i, 1)
-              connection.everySocket('manageFriendRequest', {
-                username,
-                userCode,
-                relation : 0
-              })
               return;
             }
           });
+          connection.everySocket('manageFriendRequest', returnData)
           let friendConn = server.connections["User_" + friendID]
           if (friendConn != null) {
             let myData = {
               username: user.name,
-              userCode: user.code
+              userCode: user.code,
+              relation : dataD.requestHandler
             }
             friendConn.user.friendList.forEach((friend, i) => {
               if (user.name == friend.username && user.code == friend.userCode) {
@@ -958,12 +974,8 @@ module.exports = class Connection {
             });
           }
         } else if (dataD.requestHandler == 1) {
-          //add friend
-          connection.everySocket('manageFriendRequest', {
-            username,
-            userCode,
-            relation : 1
-          })
+          //pending request response
+          connection.everySocket('manageFriendRequest', returnData)
           let friendConn = server.connections["User_" + friendID]
           if (friendConn != null) {
             let myData = {
@@ -974,11 +986,7 @@ module.exports = class Connection {
           }
         }else if (dataD.requestHandler == 2) {
           //accepted friend request
-          socket.emit('manageFriendRequest', {
-            username,
-            userCode,
-            relation : 2
-          });
+          socket.emit('manageFriendRequest', returnData);
         } 
       })
     })
@@ -1016,7 +1024,7 @@ module.exports = class Connection {
       })
     })
     socket.on('showUserProfile', (data) => {
-      console.log(data)
+      
       let username = user.name;
       let userCode = user.code;
       if(data && data.username && data.userCode && !isNaN(data.userCode) && data.username.length != 0 && data.username.length < 50){
@@ -1041,6 +1049,7 @@ module.exports = class Connection {
             username: username,
             userCode: userCode
           });
+          connection.log(`Viewing profile ${username}#${userCode}`)
       })
       
     })
