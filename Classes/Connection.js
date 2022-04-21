@@ -36,13 +36,6 @@ module.exports = class Connection {
     connection.player = new Player();
     connection.user = new User(data.correctUsername, data.userCode, data.email, data.picToken, data.profilePicType, data.wallpaperPicType, data.newAcc, data.zeroCoin, data.normalCoin, data.experience, data.settings);
 
-    // let clanLobbyID = "ClanLobby";
-    // if (clanLobbyID != null && clanLobbys[clanLobbyID] != null) {
-    //   let clanLobbys = server.clanLobbys;
-    //   socket.join(clanLobbyID);
-    //   connection.clanLobby = clanLobbys[clanLobbyID];
-    //   connection.clanLobby.onEnterClanLobby(connection);
-    // }
     // let groupLobbyID = "GroupLobby";
     // if (groupLobbyID != null && groupLobbys[groupLobbyID] != null) {
     //   let groupLobbys = server.groupLobbys;
@@ -360,10 +353,8 @@ module.exports = class Connection {
     let ViewingProfile = null;
 
     let ChatPage = 1;
-    let ChatingWithUserID = null;
-    let ChatingWithUserName = null;
-    let ChatingWithUserCode = null;
-    let CreatingPostForUser = null;
+    let ChatingWithUserID = null
+    let CreatingPostFor = null;
 
     let connection = this;
     let userID = connection.id;
@@ -405,24 +396,33 @@ module.exports = class Connection {
       });
     })
     socket.on('tellFriendsImOnline', function () {
+      connection.log("Fetching friends list")
       server.database.getFriendsList(userID, (dataD) => {
-        if (dataD.friendListJson != null)
-          user.friendList = dataD.friendListJson;
+        if (dataD.friendListJson != null) user.friendList = dataD.friendListJson;
         socket.emit('updateFriendList', dataD);
         if (user.friendList.length == 0) return;
         user.friendList.forEach((friend) => {
           let username = friend.username;
           let userCode = friend.userCode;
           server.connections.forEach(friendConn => {
-            if (friendConn.user.name == username && friendConn.user.code == userCode) {
-              let friendData = {
-                username: user.name,
-                userCode: user.code,
-                clientDevice: connection.highestPlatform
-              }
-              friendConn.everySocket('friendIsOnline', friendData)
-              return;
-            }
+            console.log(friendConn.user.name == username && friendConn.user.code == userCode)
+            // if (friendConn.user.name == username && friendConn.user.code == userCode) {
+            //   let friendData = {
+            //     username: user.name,
+            //     userCode: user.code,
+            //     clientDevice: connection.highestPlatform
+            //   }
+            //   friendConn.everySocket('friendIsOnline', friendData)
+            //   server.database.msgsRecieved(friendConn.id, connection.id, () => {
+            //     let myData = {
+            //       username,
+            //       userCode
+            //     }
+            //     console.log(myData)
+            //     friendConn.everySocket('msgsRecieved', myData)
+            //   })
+            //   return;
+            // }
           })
         })
       })
@@ -444,25 +444,22 @@ module.exports = class Connection {
     //   })
     // })
     socket.on('closeChat', function () {
-      ChatingWithUserID = null;
-      ChatingWithUserName = null;
-      ChatingWithUserCode = null;
+      ChatingWithUserID = null
       socket.emit('closeChat')
     });
     socket.on('sendMessage', function (data) {
-      if (data.message == null || ChatingWithUserID == null) return;
-      let friendID = ChatingWithUserID
+      if (!data.message || !ChatingWithUserID) return;
+      connection.log(`Sending message to userID ${ChatingWithUserID}`)
       server.database.saveMsg(userID, ChatingWithUserID, data.message.trim(), (dataD) => {
         let msgData = {
-          randomString: data.randomString,
           textID: dataD.textID,
+          oldID : data.id,
           myself: true
         }
         connection.everySocket('sendMessage', msgData)
-        let friendConn = server.connections["User_" + friendID]
+        let friendConn = server.connections["User_" + ChatingWithUserID]
         if (friendConn == null) return;
 
-        let counter = 0;
         let friendName = friendConn.user.name
         let friendCode = friendConn.user.code
         let friendData = {
@@ -485,53 +482,53 @@ module.exports = class Connection {
         }
       })
     })
+    socket.on('showChatWindow', function (data) {
+      if (!data || !data.username || !data.userCode) return;
+      server.database.searchForUser(userID, data.username, data.userCode, (dataD) => {
+        ChatPage = 1;
+        ChatingWithUserID = dataD.friendID
+        socket.emit('OpenWindow', {
+          window: 'Chat',
+          load : {
+            username: data.username, 
+            userCode: data.userCode,
+            picToken:dataD.picToken,
+            picType:dataD.picType
+          }
+        });
+      })
+    })
     socket.on('showChatHistory', function (data) {
-      if (data != null) {
-        if (data.username == null) return;
-        if (data.username.trim().length == 0) return;
-        let username = null;
-        let userCode = null;
-        data.username = data.username.trim()
-        username = data.username.substr(11, data.username.indexOf('-') - 11);
-        userCode = data.username.substr(data.username.indexOf('-') + 1, 4);
-        if (isNaN(userCode) || username.length > 50) return;
-        if (ChatingWithUserID == null || (ChatingWithUserName != username && ChatingWithUserCode != userCode)) {
-          ChatingWithUserName = username;
-          ChatingWithUserCode = userCode;
-          ChatingWithUserID = null;
-          ChatPage = 1;
-        } else {
-          return;
-        }
-      } else if (ChatingWithUserID != null) {
-        ChatPage = ChatPage + 20;
+      connection.log("Fetching chat history", data)
+      if (ChatingWithUserID) {
+        if (ChatPage != 1) {
+         ChatPage = ChatPage + 20;
+       } 
       } else {
         return;
       }
-      let startPage = ChatPage;
-      server.database.showChatHistory(userID, ChatingWithUserName, ChatingWithUserCode, ChatingWithUserID, ChatPage, (dataD) => {
+      server.database.showChatHistory(userID, ChatingWithUserID, ChatPage, (dataD) => {
         socket.emit('showChatHistory', {
           chatLog: dataD.chatLog,
           username: user.name,
           userCode: user.code,
-          startPage: startPage
+          startPage: ChatPage
         });
         if (dataD.friendID == null) return;
-        ChatingWithUserID = dataD.friendID
-        let friendConn = server.connections["User_" + ChatingWithUserID]
-        if (friendConn == null) return;
-        let myData = {
-          username: user.name,
-          userCode: user.code
+        let friendConn = server.connections["User_" + dataD.friendID]
+        if (friendConn){
+          let myData = {
+            username: user.name,
+            userCode: user.code
+          }
+          friendConn.everySocket('msgsSeen', myData)
         }
-        friendConn.everySocket('msgsSeen', myData)
       })
     });
     socket.on('msgsSeen', function (data) {
-      if (ChatingWithUserID == null) return;
-      let friendID = ChatingWithUserID
-      server.database.msgsSeen(userID, ChatingWithUserID, (dataD) => {
-        let friendConn = server.connections["User_" + friendID]
+      if (!ChatingWithUserID) return;
+      server.database.msgsSeen(userID, ChatingWithUserID, () => {
+        let friendConn = server.connections["User_" + ChatingWithUserID]
         if (friendConn == null) return;
         let myData = {
           username: user.name,
@@ -543,15 +540,14 @@ module.exports = class Connection {
     socket.on('deleteMsg', function (data) {
       let textID = data.textID.replace('textID_', '')
       if (isNaN(textID)) return;
-      if (ChatingWithUserID == null) return;
-      let friendID = ChatingWithUserID;
+      if (!ChatingWithUserID) return;
       server.database.deleteMsg(userID, textID, () => {
         let deletemsgs = {
           textID: textID,
           myself: true
         }
         connection.everySocket('deleteMsg', deletemsgs)
-        let friendConn = server.connections["User_" + friendID]
+        let friendConn = server.connections["User_" + ChatingWithUserID]
         if (friendConn == null) return;
         let myData = {
           textID: textID,
@@ -567,15 +563,14 @@ module.exports = class Connection {
       if (data.message == null) return;
       let message = data.message.trim()
       if (isNaN(textID) || message.length == 0) return;
-      if (ChatingWithUserID == null) return;
-      let friendID = ChatingWithUserID;
+      if (!ChatingWithUserID) return;
       server.database.editMsg(userID, textID, message, () => {
         let editMsgs = {
           textID: textID,
           myself: true
         }
         connection.everySocket('editMsg', editMsgs)
-        let friendConn = server.connections["User_" + friendID]
+        let friendConn = server.connections["User_" + ChatingWithUserID]
         if (friendConn == null) return;
         let myData = {
           textID: textID,
@@ -677,8 +672,7 @@ module.exports = class Connection {
           commentsList: dataD.commentsList,
           postID: postID,
           commentID: commentID,
-          page: data.page + 5,
-          onlyView : data.onlyView
+          page: data.page + 5
         });
       })
     })
@@ -723,23 +717,23 @@ module.exports = class Connection {
     // })
     socket.on('discardPost', function () {
       WINDOW = "Home"
-      if (CreatingPostForUser.type == 1) {
+      if (CreatingPostFor.type == 1) {
         WINDOW = "Profile"
-      } else if (CreatingPostForUser.type == 2) {
+      } else if (CreatingPostFor.type == 2) {
         WINDOW = "Community"
-      }else if(CreatingPostForUser.type == 3) {
+      }else if(CreatingPostFor.type == 3) {
         WINDOW = "Profile"
       }
-      CreatingPostForUser = null;
+      CreatingPostFor = null;
       socket.emit('OpenWindow', {
         window: WINDOW
       });
     })
     socket.on('fetchPostType',()=>{
       socket.emit('fetchPostType',{
-        type : CreatingPostForUser.type,
-        name : CreatingPostForUser.name,        
-        code : CreatingPostForUser.code        
+        type : CreatingPostFor.type,
+        name : CreatingPostFor.name,        
+        code : CreatingPostFor.code        
       })
     })
     socket.on('startCreatingPost', function (data) {
@@ -754,7 +748,7 @@ module.exports = class Connection {
             });
           }
           if (data.type == 1) {
-            CreatingPostForUser = {
+            CreatingPostFor = {
               type : 1,
               id : userID
             };
@@ -762,7 +756,7 @@ module.exports = class Connection {
               window: "Post"
             });
           } else if (data.type == 2) {
-            CreatingPostForUser = {
+            CreatingPostFor = {
               type : 2,
               id : null
             };
@@ -772,7 +766,7 @@ module.exports = class Connection {
           } else if (data.type == 3 && data.userCode != null && !isNaN(data.userCode) && data.username != null && data.username.trim().length != 0) {
             server.database.searchForUser(userID, data.username, data.userCode, (dataD) => {
               if (dataD.friendID != null) {
-                CreatingPostForUser = {
+                CreatingPostFor = {
                   type : 3,
                   id :  dataD.friendID,
                   picToken : dataD.picToken,
@@ -830,7 +824,7 @@ module.exports = class Connection {
       folderName = folderName.replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
       
       connection.log("Creating post type "+categoryType)
-      server.database.createPost(userID, CreatingPostForUser.id, categoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
+      server.database.createPost(userID, CreatingPostFor.id, categoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD) => {
         if (dataD.error == null) {
           
           let directory = './MediaFiles/PostFiles/' + user.picToken + '/' + folderName;
@@ -845,8 +839,8 @@ module.exports = class Connection {
             })
           }
 
-          if (CreatingPostForUser.id == connection.id) WINDOW = "Profile"
-          else if (CreatingPostForUser.id == null) WINDOW = "Community"
+          if (CreatingPostFor.id == connection.id) WINDOW = "Profile"
+          else if (CreatingPostFor.id == null) WINDOW = "Community"
           else WINDOW = "Profile"
 
           socket.emit('OpenWindow', {
@@ -895,43 +889,7 @@ module.exports = class Connection {
           });
       })
     })
-    socket.on('friendRequestAnswer', function (data) {
-      if (data == null) return;
-      if (data.username == null) return;
-      if (data.username.trim().length == 0) return;
-      let username = null;
-      let userCode = null;
-      data.username = data.username.trim()
-      username = data.username.substr(0, data.username.indexOf('-'));
-      userCode = data.username.substr(data.username.indexOf('-') + 1, 4);
-      if (isNaN(userCode) || username.length > 50 || data.respond == null) return;
-      let respond = null;
-      if (data.respond != null) {
-        respond = 1;
-      }
-      server.database.respondToFriendRequest(userID, respond, username, userCode, (dataD) => {
-        if (dataD.error != null) return;
-        if (respond && dataD.friendJson[0] != null && dataD.myJson[0] != null) {
-          let friendData = {
-            username: username,
-            userCode: userCode,
-            friendJson: dataD.friendJson
-          }
-          connection.user.friendList.push(dataD.friendJson[0])
-          connection.everySocket('friendRequestAnswer', friendData)
-          let friendConn = server.connections["User_" + dataD.friendID]
-          if (friendConn != null) {
-            let myData = {
-              username: user.name,
-              userCode: user.code,
-              friendJson: dataD.myJson
-            }
-            friendConn.user.friendList.push(dataD.myJson[0])
-            friendConn.everySocket('friendRequestAnswer', myData)
-          }
-        }
-      })
-    })
+
     socket.on('manageFriendRequest', function (data) {
       if (!ViewingProfile || !ViewingProfile.id || !ViewingProfile.name  || !ViewingProfile.code) return
       if(ViewingProfile.id === connection.id) return;
@@ -987,6 +945,26 @@ module.exports = class Connection {
         }else if (dataD.requestHandler == 2) {
           //accepted friend request
           socket.emit('manageFriendRequest', returnData);
+          // if (dataD.error != null) return;
+          // if (respond && dataD.friendJson[0] != null && dataD.myJson[0] != null) {
+          //   let friendData = {
+          //     username: username,
+          //     userCode: userCode,
+          //     friendJson: dataD.friendJson
+          //   }
+          //   connection.user.friendList.push(dataD.friendJson[0])
+          //   connection.everySocket('friendRequestAnswer', friendData)
+          //   let friendConn = server.connections["User_" + dataD.friendID]
+          //   if (friendConn != null) {
+          //     let myData = {
+          //       username: user.name,
+          //       userCode: user.code,
+          //       friendJson: dataD.myJson
+          //     }
+          //     friendConn.user.friendList.push(dataD.myJson[0])
+          //     friendConn.everySocket('friendRequestAnswer', myData)
+          //   }
+          // }
         } 
       })
     })

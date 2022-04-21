@@ -247,16 +247,13 @@ module.exports = class Database {
       console.log("Database cought error at 14: " + err);
     })
   }
-  showChatHistory(userID, friendName, userCode, currentfriendID, startPage, callback) {
+  showChatHistory(userID, friendID, startPage, callback) {
     sql.connect(config).then(pool => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
-        .input('friendName', sql.VarChar(50), friendName)
-        .input('userCode', sql.Int, userCode)
-        .input('currentfriendID', sql.BigInt, currentfriendID)
+        .input('friendID', sql.BigInt, friendID)
         .input('startPage', sql.Int, startPage)
         .output('chatLog', sql.NVarChar(sql.MAX))
-        .output('friendID', sql.BigInt)
         .execute('showChatHistory')
     }).then(result => {
       callback(result.output)
