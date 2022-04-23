@@ -1,6 +1,4 @@
 const sql = require('mssql');
-var path = require('path'),
-  fs = require('fs');
 const config = {
   user: 'sa',
   password: 'sa',
@@ -12,19 +10,32 @@ const config = {
     encrypt: true
   }
 }
-//let PasswordHash = require('password-hash')
+interface Output {
+  output: any
+}
+interface createUser{
+  email : string,
+  password :string,
+  confirmPassword : string,
+  gender :number,
+  username : string,
+  firstName: string,
+  lastName : string,
+  date : string,
+}
+// type Callback = (message: any) => void
+type Callback = ReturnType<(asd : any) => any>
+export {}
 module.exports = class Database {
   constructor() {}
-
-  getDataForSocket(platform, email, callback) { //keeps getting called for every refresh
-    sql.connect(config).then(pool => {
+  getDataForSocket(email : string, callback : Callback) { 
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
-        .input('platformEntered', sql.TinyInt, platform)
         .input('emailEntered', sql.NVarChar(100), email)
-        .output('userID', sql.BigInt)
-        .output('correctUsername', sql.VarChar(50))
-        .output('userCode', sql.Int)
+        .output('id', sql.BigInt)
+        .output('name', sql.VarChar(50))
+        .output('code', sql.Int)
         .output('email', sql.VarChar(50))
         .output('newAcc', sql.TinyInt)
         .output('picToken', sql.VarChar(250))
@@ -33,20 +44,18 @@ module.exports = class Database {
         .output('zeroCoin', sql.Int)
         .output('normalCoin', sql.Int)
         .output('experience', sql.BigInt)
-        .output('AuthToken', sql.NVarChar(50))
-        .output('platform', sql.TinyInt)
         .output('settings', sql.NVarChar(sql.MAX))
         .execute('getDataForSocket')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output);
     })
-    .catch(err => {
+    .catch((err: any) => {
       // ... error checks
-      console.log("server 1 cought error at 1: " + err);
+      console.log("Database 1 cought error at 1: " + err);
     })
   }
-  getUserProfile(userID, friendname, userCode, callback) {
-    sql.connect(config).then(pool => {
+  getUserProfile(userID : string, friendname : string, userCode : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('userID', sql.BigInt, userID)
@@ -58,160 +67,145 @@ module.exports = class Database {
         .output('friendRequest', sql.Int)
         .output('friendID', sql.BigInt)
         .execute('getUserProfile')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
-      console.log("server 1 cought error at 2: " + err);
+      console.log("Database 1 cought error at 2: " + err);
     })
   }
-  setUserPicType(email, picType, wallPic, callback) {
-    sql.connect(config).then(pool => {
+  setUserPicType(email : string, picType : string, wallPic : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('email', sql.VarChar(50), email)
         .input('profilePicType', sql.NVarChar(5), picType)
         .input('wallpaperPicType', sql.NVarChar(5), wallPic)
         .execute('setUserPicType')
-    }).then(result => {
-      callback();
-    }).catch(err => {
+    }).then((result: Output)=> {
+      callback(null);
+    }).catch((err: any)=> {
       // ... error checks
-      console.log("server 1 cought error at 3: " + err);
+      console.log("Database 1 cought error at 3: " + err);
     })
   }
-  setEveryUserToOffline(callback) { //keeps getting called for every refresh
-    sql.connect(config).then(pool => {
+  setEveryUserToOffline(callback : Callback) { //keeps getting called for every refresh
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .execute('setEveryUserToOffline')
-    }).then(result => {
-      callback();
-    }).catch(err => {
+    }).then((result: Output)=> {
+      callback(null);
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database error at 4: " + err);
     })
   }
-  emailValidation(email, callback) { //keeps getting called for every refresh
-    sql.connect(config).then(pool => {
+  emailValidation(email : string, callback : Callback) { //keeps getting called for every refresh
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('email', sql.VarChar(50), email)
         .output('EmailExistBool', sql.TinyInt)
         .execute('emailValidation')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
-      console.log("server 1 cought error at 5: " + err);
+      console.log("Database 1 cought error at 5: " + err);
     })
   }
 
-  userSignOut(userID, platform, callback) { //keeps getting called for every refresh
-    sql.connect(config).then(pool => {
+  userSignOut(userID : string, platform : string, callback : Callback) { //keeps getting called for every refresh
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('platform', sql.TinyInt, platform)
         .execute('userSignOut')
-    }).then(result => {
-      callback()
-    }).catch(err => {
+    }).then((result: Output)=> {
+      callback(null)
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database error at 6: " + err);
     })
   }
-  getFriendsList(userID, callback) {
-    sql.connect(config).then(pool => {
+  getFriendsList(userID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .output('friendListJson', sql.NVarChar(sql.MAX))
         .execute('getFriendsList')
-    }).then(result => {
-      if (result.output.friendListJson != null)
-        result.output.friendListJson = JSON.parse(result.output.friendListJson)
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 7: " + err);
     })
   }
-  getQuests(userID, callback) {
-    sql.connect(config).then(pool => {
+  getQuests(userID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .output('QuestData', sql.NVarChar(sql.MAX))
         .execute('getQuests')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output);
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 8: " + err);
     })
   }
-  msgsSeen(userID, friendID, callback) {
-    sql.connect(config).then(pool => {
+  msgsSeen(userID : string, friendID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
         .execute('msgsSeen')
-    }).then((result) => {
+    }).then((result : Output) => {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 9: " + err);
     })
   }
-  editMsg(userID, textID, message, callback) {
-    sql.connect(config).then(pool => {
+  editMsg(userID : string, textID :number, message : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('textID', sql.BigInt, textID)
         .input('message', sql.VarChar(300), message)
         .execute('editMsg')
     }).then(() => {
-      callback()
-    }).catch(err => {
+      callback(null)
+    }).catch((err: any)=> {
       console.log("Database cought error at 10: " + err);
     })
   }
-  getFriendRequest(userID, callback) {
-    sql.connect(config).then(pool => {
+  getFriendRequest(userID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .output('friendRequests', sql.NVarChar(sql.MAX))
         .execute('getFriendRequest')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 11: " + err);
     })
   }
-  userSignIn(email, password, platform, socket) {
-    if (email == null || password == null)
-      socket.emit('SignIn', {
-        AuthToken: null
-      });
-    if (password.trim().length == 0 || email.trim().length == 0)
-      socket.emit('SignIn', {
-        AuthToken: null
-      });
-    sql.connect(config).then(pool => {
+
+  userSignIn(email : string, password : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('email', sql.VarChar(50), email)
         .input('password', sql.NVarChar(50), password)
-        .input('platform', sql.TinyInt, platform)
         .output('error', sql.TinyInt)
-        .output('AuthToken', sql.NVarChar(50))
         .execute('SignIn')
-    }).then(result => {
-      socket.emit('SignIn', {
-        AuthToken: result.output.AuthToken
-      });
-    }).catch(err => {
-      // ... error checks
-      console.log("server 1 cought error at 12: " + err);
+    }).then((result: Output) => {
+      callback(result.output)
+    }).catch((err: any) => {
+      console.log("Database cought error at 12: " + err);
     })
-
   }
-  respondToFriendRequest(userID, response, friendName, userCode, callback) {
-    sql.connect(config).then(pool => {
+  respondToFriendRequest(userID : string, response : number, friendName : string, userCode  :number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .input('username', sql.VarChar(50), friendName)
@@ -222,18 +216,18 @@ module.exports = class Database {
         .output('myJson', sql.NVarChar(sql.MAX))
         .output('friendID', sql.BigInt)
         .execute('respondToFriendRequest')
-    }).then(result => {
-      if (result.output.friendJson != null && result.output.myJson != null) {
-        result.output.friendJson = JSON.parse(result.output.friendJson)
-        result.output.myJson = JSON.parse(result.output.myJson)
-      }
+    }).then((result: Output)=> {
+      // if (result.output.friendJson != null && result.output.myJson != null) {
+      //   result.output.friendJson = JSON.parse(result.output.friendJson)
+      //   result.output.myJson = JSON.parse(result.output.myJson)
+      // }
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 13: " + err);
     })
   }
-  saveMsg(userID, friendID, message, callback) {
-    sql.connect(config).then(pool => {
+  saveMsg(userID : string, friendID : string, message : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input("friendID", sql.BigInt, friendID)
@@ -241,80 +235,80 @@ module.exports = class Database {
         .output("textID", sql.BigInt)
         .output("unSeenMsgsCount", sql.Int)
         .execute('saveMsg')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 14: " + err);
     })
   }
-  showChatHistory(userID, friendID, startPage, callback) {
-    sql.connect(config).then(pool => {
+  showChatHistory(userID : string, friendID : string, startPage : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
         .input('startPage', sql.Int, startPage)
         .output('chatLog', sql.NVarChar(sql.MAX))
         .execute('showChatHistory')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 15: " + err);
     })
   }
-  deleteMsg(userID, textID, callback) {
-    sql.connect(config).then(pool => {
+  deleteMsg(userID : string, textID : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('textID', sql.BigInt, textID)
         .execute('deleteMsg')
     }).then(() => {
-      callback()
-    }).catch(err => {
+      callback(null)
+    }).catch((err: any)=> {
       console.log("Database cought error at 16: " + err);
     })
   }
-  msgsRecieved(userID, friendID, callback) {
-    sql.connect(config).then(pool => {
+  msgsRecieved(userID : string, friendID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
         .execute('msgsRecieved')
     }).then(() => {
-      callback()
-    }).catch(err => {
+      callback(null)
+    }).catch((err: any)=> {
       console.log("Database cought error at 17: " + err);
     })
   }
-  manageFriendRequest(userID, friendID,response, callback) {
-    sql.connect(config).then(pool => {
+  manageFriendRequest(userID : string, friendID : string,response : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
         .input('response', sql.TinyInt, response)
         .output('requestHandler', sql.TinyInt)
         .execute('manageFriendRequest')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 18: " + err);
     })
   }
-  unlinkAccountLinks(userID, username, userCode, callback) {
-    sql.connect(config).then(pool => {
+  unlinkAccountLinks(userID : string, username : string, userCode : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .input('username', sql.VarChar(50), username)
         .input('userCode', sql.Int, userCode)
         .output('friendID', sql.BigInt)
         .execute('unlinkAccountLinks')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 19: " + err);
     })
   }
-  GainCoinAndExperience(userID, normalCoinAmount, experienceAmount, callback) {
-    sql.connect(config).then(pool => {
+  GainCoinAndExperience(userID : string, normalCoinAmount : number, experienceAmount : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .input('normalCoinAmount', sql.Int, normalCoinAmount)
@@ -322,28 +316,28 @@ module.exports = class Database {
         .output('normalCoin', sql.Int)
         .output('experience', sql.Int)
         .execute('addExperienceAndNormalCoin')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 20: " + err);
     })
   }
-  getAccountLinks(userID, callback) {
-    sql.connect(config).then(pool => {
+  getAccountLinks(userID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .output('FirstLinkAccount', sql.NVarChar(sql.MAX))
         .output('SecondLinkAccount', sql.NVarChar(sql.MAX))
         .output('ThirdLinkAccount', sql.NVarChar(sql.MAX))
         .execute('getAccountLinks')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 21: " + err);
     })
   }
-  setAccountLinks(userID, email, password, callback) {
-    sql.connect(config).then(pool => {
+  setAccountLinks(userID : string, email : string, password : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('email', sql.VarChar(50), email)
@@ -352,14 +346,14 @@ module.exports = class Database {
         .output('userCode', sql.Int)
         .output('friendID', sql.BigInt)
         .execute('setAccountLinks')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 22: " + err);
     })
   }
-  accessAccountLinks(userID, username, userCode, platform, callback) {
-    sql.connect(config).then(pool => {
+  accessAccountLinks(userID : string, username : string, userCode : number, platform : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('username', sql.NVarChar(50), username)
@@ -367,53 +361,53 @@ module.exports = class Database {
         .input('platform', sql.TinyInt, platform)
         .output('AuthToken', sql.NVarChar(50))
         .execute('accessAccountLinks')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 23: " + err);
     })
   }
-  unFriendRelation(userID, friendID, callback) {
-    sql.connect(config).then(pool => {
+  unFriendRelation(userID : string, friendID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
         .execute('unFriendRelation')
-    }).catch(err => {
+    }).catch((err: any)=> {
       console.log("Database cought error at 24: " + err);
     })
   }
-  getSkins(search, category, option, callback) {
-    sql.connect(config).then(pool => {
+  getSkins(search : string, category  : number, option : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('search', sql.VarChar(50), search)
         .input('category', sql.TinyInt, category)
         .input('option', sql.TinyInt, option)
         .output('skinData', sql.NVarChar(sql.MAX))
         .execute('getSkins')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 25: " + err);
     })
   }
-  getClassList(classID, callback) {
-    sql.connect(config).then(pool => {
+  getClassList(classID : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('classID', sql.Int, classID)
         .output('classData', sql.NVarChar(sql.MAX))
         .execute('getClassList')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 26: " + err);
     })
   }
-  createComment(userID, postID, commentID, text, callback) {
-    sql.connect(config).then(pool => {
+  createComment(userID : string, postID : string, commentID : string, text : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('fromUserID', sql.BigInt, userID)
         .input('postID', sql.BigInt, postID)
@@ -423,15 +417,15 @@ module.exports = class Database {
         .output('commentDate', sql.DateTime)
         .output('error', sql.TinyInt)
         .execute('createComment')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 27: " + err);
     })
   }
-  saveContent(userID, postID, commentID, text, callback) {
-    sql.connect(config).then(pool => {
+  saveContent(userID : string, postID : string, commentID : number, text : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('postID', sql.BigInt, postID)
@@ -439,30 +433,30 @@ module.exports = class Database {
         .input('text', sql.NVarChar(sql.MAX), text)
         .output('answer', sql.Int)
         .execute('saveContent')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 28: " + err);
     })
   }
-  getSpecificContent(userID, postID, commentID, callback) {
-    sql.connect(config).then(pool => {
+  getSpecificContent(userID : string, postID : string, commentID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('postID', sql.BigInt, postID)
         .input('commentID', sql.BigInt, commentID)
         .output('content', sql.NVarChar(sql.MAX))
         .execute('getSpecificContent')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 29: " + err);
     })
   }
-  setUserOpinion(userID, postID, commentID, opinion, callback) {
-    sql.connect(config).then(pool => {
+  setUserOpinion(userID : string, postID : string, commentID : string, opinion : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('postID', sql.BigInt, postID)
@@ -472,26 +466,26 @@ module.exports = class Database {
         .output('disagree', sql.BigInt)
         .output('error', sql.tinyInt)
         .execute('setUserOpinion')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 30: " + err);
     })
   }
-  userDisconnected(userID, platform) {
-    sql.connect(config).then(pool => {
+  userDisconnected(userID:string, platform : string) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('platform', sql.TinyInt, platform)
         .execute('userDisconnected')
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 31: " + err);
     })
   }
-  searchForUser(userID, username, userCode, callback) {
-    sql.connect(config).then(pool => {
+  searchForUser(userID : string, username : string, userCode : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('currentUserID', sql.BigInt, userID)
         .input('username', sql.VarChar(50), username)
@@ -500,15 +494,15 @@ module.exports = class Database {
         .output('picToken', sql.VarChar(250))
         .output('picType', sql.NVarChar(5))
         .execute('searchForUser')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 32: " + err);
     })
   }
-  editProfileInfo(userID, firstname, lastname, gender, birthDate, callback) {
-    sql.connect(config).then(pool => {
+  editProfileInfo(userID : string, firstname : string, lastname : string, gender : number, birthDate : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('firstname', sql.VarChar(50), firstname)
@@ -517,16 +511,16 @@ module.exports = class Database {
         .input('birthDate', sql.Date, birthDate)
         .output('error', sql.TinyInt)
         .execute('editProfileInfo')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 33: " + err);
     })
   }
 
-  getUserInformation(userID, callback) {
-    sql.connect(config).then(pool => {
+  getUserInformation(userID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .output('firstname', sql.VarChar(50))
@@ -537,15 +531,15 @@ module.exports = class Database {
         .output('birthDate', sql.Date)
         .output('error', sql.TinyInt)
         .execute('getMyInfo')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 34: " + err);
     })
   }
-  editPassword(userID, oldpassword, confpassword, newpassword, callback) {
-    sql.connect(config).then(pool => {
+  editPassword(userID : string, oldpassword : string, confpassword : string, newpassword : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('oldpassword', sql.VarChar(50), oldpassword)
@@ -553,51 +547,51 @@ module.exports = class Database {
         .input('newpassword', sql.VarChar(50), newpassword)
         .output('error', sql.TinyInt)
         .execute('editPassword')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 35: " + err);
     })
   }
-  SetGameSound(userID, sound) {
-    sql.connect(config).then(pool => {
+  SetGameSound(userID : string, sound:number) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('sound', sql.Float, sound)
         .execute('SetGameSound')
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 36: " + err);
     })
   }
-  SetGameThemeColor(userID, color) {
-    sql.connect(config).then(pool => {
+  SetGameThemeColor(userID : string, color:number) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('color', sql.TinyInt, color)
         .execute('SetGameThemeColor')
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 37: " + err);
     })
   }
-  deleteContent(userID, postID, commentID, callback) {
-    sql.connect(config).then(pool => {
+  deleteContent(userID : string, postID : string, commentID : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('postID', sql.BigInt, postID)
         .input('commentID', sql.BigInt, commentID)
         .execute('deleteContent')
-    }).then(result => {
-      callback(result.output)
-    }).catch(err => {
+    }).then((result: Output)=> {
+      callback(null)
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 38: " + err);
     })
   }
-  getTopComments(userID, postID, commentID, startPage, callback) {
-    sql.connect(config).then(pool => {
+  getTopComments(userID : string, postID : string, commentID : string, startPage : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('viewerUserID', sql.BigInt, userID)
         .input('postID', sql.BigInt, postID)
@@ -605,15 +599,15 @@ module.exports = class Database {
         .input('startPage', sql.Int, startPage)
         .output('commentsList', sql.NVarChar(sql.MAX))
         .execute('getTopComments')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 39: " + err);
     })
   }
-  getTopPosts(userID, categoryID, username, userCode, startPage, callback) {
-    sql.connect(config).then(pool => {
+  getTopPosts(userID : string, categoryID:number, username : string, userCode : number, startPage : number, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('viewerUserID', sql.BigInt, userID)
@@ -624,52 +618,36 @@ module.exports = class Database {
         .output('categoryName', sql.NVarChar(50))
         .output('postsList', sql.NVarChar(sql.MAX))
         .execute('getTopPosts')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 40: " + err);
     })
   }
-  createUser(data, callback) {
-    sql.connect(config).then(pool => {
-      if (data == null) return;
-      if (data.password != data.confirmPassword) return;
-      if (data.gender != 1 && data.gender != 2) return;
-      if (data.username == null ||
-        data.firstname == null ||
-        data.lastname == null ||
-        data.password == null ||
-        data.gender == null ||
-        data.birthYear == null ||
-        data.birthMonth == null ||
-        data.birthMonth == null ||
-        data.birthDay == null
-      ) return;
+  createUser(userData : createUser, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
-        .input('firstname', sql.VarChar(50), data.firstname)
-        .input('lastname', sql.VarChar(50), data.lastname)
-        .input('email', sql.VarChar(250), data.email)
-        .input('password', sql.VarChar(50), data.password)
-        .input('gender', sql.TinyInt, data.gender)
-        .input('username', sql.VarChar(50), data.username)
-        .input('birthYear', sql.SmallInt, data.birthYear)
-        .input('birthMonth', sql.TinyInt, data.birthMonth)
-        .input('birthDay', sql.TinyInt, data.birthDay)
+        .input('firstname', sql.VarChar(50), userData.firstName)
+        .input('lastname', sql.VarChar(50), userData.lastName)
+        .input('email', sql.VarChar(250), userData.email)
+        .input('password', sql.VarChar(50), userData.password)
+        .input('gender', sql.TinyInt, userData.gender)
+        .input('username', sql.VarChar(50), userData.username)
+        .input('birthDate', sql.Date, userData.date)
         .output('picToken', sql.VarChar(250))
-        .output('AuthToken', sql.NVarChar(50))
         .output('error', sql.TinyInt)
         .execute('createUser')
-    }).then(result => {
+    }).then((result: Output) => {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any) => {
       // ... error checks
-      console.log("server 1 cought error at 41: " + err);
+      console.log("Database cought error at 41: " + err);
     })
   }
-  createPost(userID, toUserID, categoryType, title, text, url, mediaFiles, mediaFolder, callback) {
-    sql.connect(config).then(pool => {
+  createPost(userID : string, toUserID : string, categoryType : number, title: string, text: string, url: string, mediaFiles: string, mediaFolder: string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('fromUserID', sql.BigInt, userID)
         .input('toUserID', sql.BigInt, toUserID)
@@ -682,23 +660,23 @@ module.exports = class Database {
         .output('postID', sql.BigInt)
         .output('error', sql.tinyInt)
         .execute('createPost')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 42: " + err);
     })
   }
-  getCategoryList(categoryName, callback) {
-    sql.connect(config).then(pool => {
+  getCategoryList(categoryName: string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('categoryName', sql.NVarChar(50) , categoryName)
         .output('categoryList', sql.NVarChar(sql.MAX))
         .output('categorySuggestionList', sql.NVarChar(sql.MAX))
         .execute('getCategoryList')
-    }).then(result => {
+    }).then((result: Output)=> {
       callback(result.output)
-    }).catch(err => {
+    }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 43: " + err);
     })

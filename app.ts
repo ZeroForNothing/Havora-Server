@@ -1,5 +1,8 @@
+import { Socket } from "socket.io";
+
 require('dotenv').config();
 //server initiate
+export {}
 const express = require('express')
 const session = require('express-session')
 const formidable = require('formidable');
@@ -14,10 +17,6 @@ app.use(session({
   saveUninitialized: true,
   resave: true
 }));
-
-let GameServer = require('./Classes/GameServer')
-let gameServer = new GameServer();
-
 const serverManager = require('http').Server(app)
 const io = require("socket.io")(serverManager,
   {
@@ -26,34 +25,27 @@ const io = require("socket.io")(serverManager,
       methods: ["GET", "POST"]
     }
   }
-);
-function serverLog(text) {
-  console.log("Node Server =>", text);
-}
-
-serverManager.listen(process.env.PORT || 3004, () => serverLog(`Listening on port 3004`));
-
-const sql = require('mssql');
-const fs = bluebird.promisifyAll(require('fs'));
-const path = require('path');
-
-const config = {
-  user: 'sa',
-  password: 'sa',
-  server: 'localhost',
-  database: 'Zero for Nothing',
-  port: 1433,
-  options: {
-    enableArithAbort: true,
-    encrypt: true
+  );
+  const sql = require('mssql');
+  const fs = bluebird.promisifyAll(require('fs'));
+  const path = require('path');
+  
+  
+  function serverLog(text : string) {
+    console.log("Web Node Server =>", text);
   }
-}
+  
+  serverManager.listen(process.env.WEBPORT, () => serverLog(`Listening on port ${process.env.WEBPORT}`));
+  
+  let WebServer = require('./server')
+  let nodeServer = new WebServer();
+  
+  const PlatformState = require('./Utility/PlatformState')
+  let platformState = new PlatformState();
 
 app.use('/MediaFiles', express.static(path.join(__dirname, 'MediaFiles')))
-console.log(__dirname + '/MediaFiles')
-//app.use(express.static(__dirname + '/MediaFiles/'))
 
-async function checkCreateUploadsFolder(uploadsFolder) {
+async function checkCreateUploadsFolder(uploadsFolder : string) {
   try {
     await fs.statAsync(uploadsFolder)
   } catch (e) {
@@ -74,7 +66,7 @@ async function checkCreateUploadsFolder(uploadsFolder) {
 }
 
 // Returns true or false depending on whether the file is an accepted type
-function checkAcceptedExtensions(file) {
+function checkAcceptedExtensions(file : any) {
   const type = file.type.split('/').pop()
   const accepted = ['jpeg', 'jpg', 'png', 'mp4', 'mp3', 'mov', 'avi', 'mkv', 'x-matroska']
   if (accepted.indexOf(type) == -1) {
@@ -82,7 +74,7 @@ function checkAcceptedExtensions(file) {
   }
   return true
 }
-async function ManageFile(file, uploadsFolder, fileName) {
+async function ManageFile(file : any, uploadsFolder : string, fileName : string) {
   try {
     await fs.renameAsync(file.path, path.join(uploadsFolder, fileName))
   } catch (e) {
@@ -96,7 +88,7 @@ async function ManageFile(file, uploadsFolder, fileName) {
   return true
 }
 
-app.post('/upload', async (req, res) => {
+app.post('/upload', async (req : any, res : any) => {
   let form = formidable.IncomingForm()
   let picToken = req.query.picToken;
   if (!picToken) res.json({ ok: false, error: 'Pictoken not found' })
@@ -112,7 +104,7 @@ app.post('/upload', async (req, res) => {
   // form.on('progress', (bytesReceived, bytesExpected) => {
   //   serverLog("File progress "+bytesReceived+" "+ bytesExpected)
   // });
-  form.parse(req, async (err, fields, files) => {
+  form.parse(req, async (err : any, fields : any, files : any) => {
 
     if (err) {
       serverLog('Error parsing the incoming form')
@@ -134,7 +126,7 @@ app.post('/upload', async (req, res) => {
     return res.json({ ok: true, msg: true })
   })
 })
-app.post('/profileUpload', async (req, res) => {
+app.post('/profileUpload', async (req : any, res : any) => {
   let form = formidable.IncomingForm()
   let picToken = req.query.picToken;
   let picType = req.query.picType;
@@ -152,14 +144,14 @@ app.post('/profileUpload', async (req, res) => {
   const folderCreationResult = await checkCreateUploadsFolder(uploadsFolder)
   if (!folderCreationTempResult || !folderCreationResult)
     return res.json({ ok: false, error: "The uploads folder wasn't found" })
-  fs.readdirAsync(uploadsTempFolder, (err, tempfiles) => {
+  fs.readdirAsync(uploadsTempFolder, (err : any, tempfiles : any) => {
     if (err) throw err;
     for (const tempfile of tempfiles) {
-      fs.unlinkAsync(path.join(uploadsTempFolder, tempfile), err => {
+      fs.unlinkAsync(path.join(uploadsTempFolder, tempfile), (err : any) => {
         if (err) console.error(err);
       });
     }
-    form.parse(req, async (err, fields, files) => {
+    form.parse(req, async (err: any, fields: any, files: any) => {
       if (err) {
         serverLog('Error parsing the incoming form')
         return res.json({ ok: false, error: 'Error passing the incoming form' })
@@ -182,14 +174,18 @@ app.post('/profileUpload', async (req, res) => {
       else wallPicType = type;
       const fileManaged = await ManageFile(file, uploadsFolder, fileName)
       if (!fileManaged) res.json({ ok: false, error: 'Error managing uploaded file' })
-      gameServer.database.setUserPicType(fields.email, profPicType, wallPicType, () => {
-        serverLog(`Uploaded image successfully of type ${picType == 1 ? "Profile" : "Wallpaper"} , name: file.${type}`)
-        return res.json({ ok: true, msg: true })
-      })
+        nodeServer.database.setUserPicType(fields.email, profPicType, wallPicType, () => {
+          serverLog(`Uploaded image successfully of type ${picType == 1 ? "Profile" : "Wallpaper"} , name: file.${type}`)
+          return res.json({ ok: true, msg: true })
+        })
     })
   })
 })
-app.post('/CreateUser', (req, res) => {
+interface createUser{
+  picToken : string,
+  error : number
+}
+app.post('/CreateUser', (req : any, res : any) => {
 
   let firstName = req.body.firstName;
   let lastName = req.body.lastName;
@@ -253,76 +249,37 @@ app.post('/CreateUser', (req, res) => {
     return res.json({
       error: errorLog
     })
-  sql.connect(config).then(pool => {
-    // Stored procedure
-    return pool.request()
-      .input('firstname', sql.VarChar(50), firstName)
-      .input('lastname', sql.VarChar(50), lastName)
-      .input('email', sql.VarChar(250), email)
-      .input('password', sql.VarChar(50), password)
-      .input('gender', sql.TinyInt, gender)
-      .input('username', sql.VarChar(50), username)
-      .input('birthDate', sql.Date, date)
-      .output('picToken', sql.VarChar(250))
-      .output('error', sql.TinyInt)
-      .execute('createUser')
-  }).then(result => {
-    let error = null;
-    if (result.output.error == null) {
-      createPicTokenFile(result.output.picToken);
-    } else if (result.output.error == 1) {
-      error = "Email already exists"
-    } else if (result.output.error == 2) {
-      error = "Input error"
-    }
-    res.json({ error })
-  }).catch(err => {
-    let error = err.toString();
-    serverLog("server cought error at register user: " + err);
-    if (error.includes("ConnectionError"))
-      return res.json({
-        error: "Server Connection Error"
+  nodeServer.database.createUser(req.body,(dataD : createUser) => {
+      if (dataD.error == null) {
+        createPicTokenFile(dataD.picToken);
+      }
+      return res.json({ 
+        error : dataD.error
       })
   })
 })
 
-app.post('/LoginUser', (req, res) => {
-  let client = req.body.client;
-  let platform = 3;
-  if (client) {
-    platform = 2
-  }
-  serverLog("Signin with platform " + platform + client)
-  let email = req.body.email;
-  let password = req.body.password;
-  if (email.trim().length == 0 || password.trim().length == 0)
+interface userSignIn{
+  error : number
+}
+app.post('/LoginUser', (req : any, res : any) => {
+  if(!platformState.isPlatform(req.body.platform)) return;
+    let email = req.body.email;
+    let password = req.body.password;
+    if (email.trim().length == 0 || password.trim().length == 0)
     return res.json({
       error: true
     })
-  sql.connect(config).then(pool => {
-    // Stored procedure
-    return pool.request()
-      .input('email', sql.VarChar(50), email)
-      .input('password', sql.NVarChar(50), password)
-      .input('platform', sql.TinyInt, platform)
-      .output('error', sql.TinyInt)
-      .execute('SignIn')
-  }).then(result => {
-    res.json({
+  serverLog(`Signin with ${email} on ${req.body.platform}`)
+  nodeServer.database.userSignIn(req.body.email,req.body.password,(dataD : userSignIn) => {
+    return res.json({
       email: email,
-      platform: platform,
-      error: result.output.error
+      platform: req.body.platform,
+      error: dataD.error
     })
-  }).catch(err => {
-    let error = err.toString();
-    serverLog("server cought error at login user: " + err);
-    if (error.includes("ConnectionError"))
-      return res.json({
-        error: "Server Connection Error"
-      })
   })
 })
-function createPicTokenFile(picToken) {
+function createPicTokenFile(picToken : string) {
   serverLog("Creating user files with token " + picToken);
   let profDir = './MediaFiles/ProfilePic/' + picToken;
   let wallDir = './MediaFiles/WallpaperPic/' + picToken;
@@ -332,42 +289,42 @@ function createPicTokenFile(picToken) {
   let tempWallDir = './MediaTempFiles/WallpaperPic/' + picToken;
   let tempPostMediaDir = './MediaTempFiles/PostFiles/' + picToken;
 
-  fs.access(profDir, function (error) {
+  fs.access(profDir, function (error : any) {
     if (error) {
       fs.mkdirAsync(profDir);
     } else {
       console.log("Directory already exists.")
     }
   })
-  fs.access(wallDir, function (error) {
+  fs.access(wallDir, function (error : any) {
     if (error) {
       fs.mkdirAsync(wallDir);
     } else {
       console.log("Directory already exists.")
     }
   })
-  fs.access(postMediaDir, function (error) {
+  fs.access(postMediaDir, function (error : any) {
     if (error) {
       fs.mkdirAsync(postMediaDir);
     } else {
       console.log("Directory already exists.")
     }
   })
-  fs.access(tempProfDir, function (error) {
+  fs.access(tempProfDir, function (error : any) {
     if (error) {
       fs.mkdirAsync(tempProfDir);
     } else {
       console.log("Directory already exists.")
     }
   })
-  fs.access(tempWallDir, function (error) {
+  fs.access(tempWallDir, function (error : any) {
     if (error) {
       fs.mkdirAsync(tempWallDir);
     } else {
       console.log("Directory already exists.")
     }
   })
-  fs.access(tempPostMediaDir, function (error) {
+  fs.access(tempPostMediaDir, function (error : any) {
     if (error) {
       fs.mkdirAsync(tempPostMediaDir);
     } else {
@@ -375,17 +332,14 @@ function createPicTokenFile(picToken) {
     }
   })
 }
-
-// let Queue = require('./Classes/Queue.js');
-
-setInterval(() => {
-  gameServer.onUpdate();
-}, 100 / 3, 0);
-
-io.on('connection', function (socket) {
+interface socketLogin{
+    platform : string;
+    email : string;
+}
+io.on('connection', function (socket : Socket) {
   serverLog("Connection Started ( Socket id: " + socket.id + " )")
-  socket.on('socketLogin', function (data) {
+  socket.on('socketLogin', function (data : socketLogin) {
     if (data.platform != null && data.email != null)
-      gameServer.onConnected(socket, data.platform, data.email);
+      nodeServer.onConnected(socket, data.platform, data.email);
   });
 })
