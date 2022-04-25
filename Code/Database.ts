@@ -39,8 +39,8 @@ module.exports = class Database {
         .output('email', sql.VarChar(50))
         .output('newAcc', sql.TinyInt)
         .output('picToken', sql.VarChar(250))
-        .output('profilePicType', sql.NVarChar(5))
-        .output('wallpaperPicType', sql.NVarChar(5))
+        .output('profilePicType', sql.NVarChar(50))
+        .output('wallpaperPicType', sql.NVarChar(50))
         .output('zeroCoin', sql.Int)
         .output('normalCoin', sql.Int)
         .output('experience', sql.BigInt)
@@ -62,8 +62,8 @@ module.exports = class Database {
         .input('friendName', sql.NVarChar(50), friendname)
         .input('userCode', sql.Int, userCode)
         .output('picToken', sql.NVarChar(250))
-        .output('profilePicType', sql.NVarChar(5))
-        .output('wallpaperPicType', sql.NVarChar(5))
+        .output('profilePicType', sql.NVarChar(50))
+        .output('wallpaperPicType', sql.NVarChar(50))
         .output('friendRequest', sql.Int)
         .output('friendID', sql.BigInt)
         .execute('getUserProfile')
@@ -74,12 +74,12 @@ module.exports = class Database {
       console.log("Database 1 cought error at 2: " + err);
     })
   }
-  setUserPicType(email : string, picType : string, wallPic : string, callback : Callback) {
+  setUserPicType(userID : string, picType : string, wallPic : string, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
-        .input('email', sql.VarChar(50), email)
-        .input('profilePicType', sql.NVarChar(5), picType)
-        .input('wallpaperPicType', sql.NVarChar(5), wallPic)
+      .input('userID', sql.BigInt, userID)
+        .input('profilePicType', sql.NVarChar(50), picType)
+        .input('wallpaperPicType', sql.NVarChar(50), wallPic)
         .execute('setUserPicType')
     }).then((result: Output)=> {
       callback(null);
@@ -492,7 +492,7 @@ module.exports = class Database {
         .input('userCode', sql.Int, userCode)
         .output('friendID', sql.BigInt)
         .output('picToken', sql.VarChar(250))
-        .output('picType', sql.NVarChar(5))
+        .output('picType', sql.NVarChar(50))
         .execute('searchForUser')
     }).then((result: Output)=> {
       callback(result.output)

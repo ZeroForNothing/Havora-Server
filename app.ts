@@ -37,150 +37,12 @@ const io = require("socket.io")(serverManager,
   
   serverManager.listen(process.env.WEBPORT, () => serverLog(`Listening on port ${process.env.WEBPORT}`));
   
-  let WebServer = require('./server')
+  let WebServer = require('./Code/server')
   let nodeServer = new WebServer();
   
-  const PlatformState = require('./Utility/PlatformState')
+  const PlatformState = require('./Code/Utility/PlatformState')
   let platformState = new PlatformState();
 
-app.use('/MediaFiles', express.static(path.join(__dirname, 'MediaFiles')))
-
-async function checkCreateUploadsFolder(uploadsFolder : string) {
-  try {
-    await fs.statAsync(uploadsFolder)
-  } catch (e) {
-    if (e && e.code == 'ENOENT') {
-      serverLog('The uploads folder doesn\'t exist, creating a new one...')
-      try {
-        await fs.mkdirAsync(uploadsFolder)
-      } catch (err) {
-        serverLog('Error creating the uploads folder 1')
-        return false
-      }
-    } else {
-      serverLog('Error creating the uploads folder 2')
-      return false
-    }
-  }
-  return true
-}
-
-// Returns true or false depending on whether the file is an accepted type
-function checkAcceptedExtensions(file : any) {
-  const type = file.type.split('/').pop()
-  const accepted = ['jpeg', 'jpg', 'png', 'mp4', 'mp3', 'mov', 'avi', 'mkv', 'x-matroska']
-  if (accepted.indexOf(type) == -1) {
-    return false
-  }
-  return true
-}
-async function ManageFile(file : any, uploadsFolder : string, fileName : string) {
-  try {
-    await fs.renameAsync(file.path, path.join(uploadsFolder, fileName))
-  } catch (e) {
-    serverLog('Error uploading the file')
-    try {
-      serverLog('Try again later removing temp file')
-      await fs.unlinkAsync(file.path);
-    } catch (e) { }
-    return false
-  }
-  return true
-}
-
-app.post('/upload', async (req : any, res : any) => {
-  let form = formidable.IncomingForm()
-  let picToken = req.query.picToken;
-  if (!picToken) res.json({ ok: false, error: 'Pictoken not found' })
-  const uploadsTempFolder = path.join(__dirname, 'MediaTempFiles', 'PostFiles', picToken)
-  const uploadsFolder = path.join(__dirname, 'MediaFiles', 'PostFiles', picToken)
-  form.multiples = false
-  form.uploadDir = uploadsTempFolder
-  form.maxFileSize = 100 * 1024 * 1024 // 100 MB
-  const folderCreationTempResult = await checkCreateUploadsFolder(uploadsTempFolder)
-  const folderCreationResult = await checkCreateUploadsFolder(uploadsFolder)
-  if (!folderCreationTempResult || !folderCreationResult)
-    return res.json({ ok: false, error: "The uploads folder wasn't found" })
-  // form.on('progress', (bytesReceived, bytesExpected) => {
-  //   serverLog("File progress "+bytesReceived+" "+ bytesExpected)
-  // });
-  form.parse(req, async (err : any, fields : any, files : any) => {
-
-    if (err) {
-      serverLog('Error parsing the incoming form')
-      return res.json({ ok: false, error: 'Error passing the incoming form' })
-    }
-    // If we are sending only one file:
-    if (!files.files) {
-      serverLog('No file selected')
-      return res.json({ ok: false, error: 'No file selected' })
-    }
-    const file = files.files
-    if (!checkAcceptedExtensions(file)) return res.json({ ok: false, error: 'Invalid file type' })
-
-    const type = file.type.split('/').pop()
-    const fileName = nanoid() + "." + type
-    const fileManaged =  await ManageFile(file, uploadsTempFolder ,fileName)
-    if(!fileManaged) res.json({ok: false, error: 'Error uploading the file'})
-    serverLog('Successfully upload file to temp')
-    return res.json({ ok: true, msg: true })
-  })
-})
-app.post('/profileUpload', async (req : any, res : any) => {
-  let form = formidable.IncomingForm()
-  let picToken = req.query.picToken;
-  let picType = req.query.picType;
-
-  if (!picToken) res.json({ ok: false, error: 'Pictoken not found' })
-  if (!picType || isNaN(picType)) res.json({ ok: false, error: 'Picture param invalid' })
-  let fileLocationNeeded = '';
-  if (picType == 1) fileLocationNeeded = 'ProfilePic'; else fileLocationNeeded = 'WallpaperPic';
-  const uploadsTempFolder = path.join(__dirname, 'MediaTempFiles', fileLocationNeeded, picToken)
-  const uploadsFolder = path.join(__dirname, 'MediaFiles', fileLocationNeeded, picToken)
-  form.multiples = false
-  form.uploadDir = uploadsTempFolder
-  form.maxFileSize = 100 * 1024 * 1024 // 100 MB
-  const folderCreationTempResult = await checkCreateUploadsFolder(uploadsTempFolder)
-  const folderCreationResult = await checkCreateUploadsFolder(uploadsFolder)
-  if (!folderCreationTempResult || !folderCreationResult)
-    return res.json({ ok: false, error: "The uploads folder wasn't found" })
-  fs.readdirAsync(uploadsTempFolder, (err : any, tempfiles : any) => {
-    if (err) throw err;
-    for (const tempfile of tempfiles) {
-      fs.unlinkAsync(path.join(uploadsTempFolder, tempfile), (err : any) => {
-        if (err) console.error(err);
-      });
-    }
-    form.parse(req, async (err: any, fields: any, files: any) => {
-      if (err) {
-        serverLog('Error parsing the incoming form')
-        return res.json({ ok: false, error: 'Error passing the incoming form' })
-      }
-      if (!files.files) {
-        serverLog('No file selected')
-        return res.json({ ok: false, error: 'No file selected' })
-      }
-      if (!fields.email) {
-        serverLog('NoSignin required to upload pic')
-        return res.json({ ok: false, error: 'Signin required to upload pic' })
-      }
-      const file = files.files
-      if (!checkAcceptedExtensions(file)) return res.json({ ok: false, error: 'Invalid file type' })
-      const type = file.type.split('/').pop()
-      const fileName = "file." + type;
-      let profPicType = null;
-      let wallPicType = null;
-      if (picType == 1) profPicType = type;
-      else wallPicType = type;
-      const fileManaged = await ManageFile(file, uploadsFolder, fileName)
-      if (!fileManaged) res.json({ ok: false, error: 'Error managing uploaded file' })
-        nodeServer.database.setUserPicType(fields.email, profPicType, wallPicType, () => {
-          serverLog(`Uploaded image successfully of type ${picType == 1 ? "Profile" : "Wallpaper"} , name: file.${type}`)
-          return res.json({ ok: true, msg: true })
-        })
-    })
-  })
-})
 interface createUser{
   picToken : string,
   error : number
@@ -251,7 +113,7 @@ app.post('/CreateUser', (req : any, res : any) => {
     })
   nodeServer.database.createUser(req.body,(dataD : createUser) => {
       if (dataD.error == null) {
-        createPicTokenFile(dataD.picToken);
+        //createPicTokenFile(dataD.picToken);
       }
       return res.json({ 
         error : dataD.error
@@ -279,59 +141,6 @@ app.post('/LoginUser', (req : any, res : any) => {
     })
   })
 })
-function createPicTokenFile(picToken : string) {
-  serverLog("Creating user files with token " + picToken);
-  let profDir = './MediaFiles/ProfilePic/' + picToken;
-  let wallDir = './MediaFiles/WallpaperPic/' + picToken;
-  let postMediaDir = './MediaFiles/PostFiles/' + picToken;
-
-  let tempProfDir = './MediaTempFiles/ProfilePic/' + picToken;
-  let tempWallDir = './MediaTempFiles/WallpaperPic/' + picToken;
-  let tempPostMediaDir = './MediaTempFiles/PostFiles/' + picToken;
-
-  fs.access(profDir, function (error : any) {
-    if (error) {
-      fs.mkdirAsync(profDir);
-    } else {
-      console.log("Directory already exists.")
-    }
-  })
-  fs.access(wallDir, function (error : any) {
-    if (error) {
-      fs.mkdirAsync(wallDir);
-    } else {
-      console.log("Directory already exists.")
-    }
-  })
-  fs.access(postMediaDir, function (error : any) {
-    if (error) {
-      fs.mkdirAsync(postMediaDir);
-    } else {
-      console.log("Directory already exists.")
-    }
-  })
-  fs.access(tempProfDir, function (error : any) {
-    if (error) {
-      fs.mkdirAsync(tempProfDir);
-    } else {
-      console.log("Directory already exists.")
-    }
-  })
-  fs.access(tempWallDir, function (error : any) {
-    if (error) {
-      fs.mkdirAsync(tempWallDir);
-    } else {
-      console.log("Directory already exists.")
-    }
-  })
-  fs.access(tempPostMediaDir, function (error : any) {
-    if (error) {
-      fs.mkdirAsync(tempPostMediaDir);
-    } else {
-      console.log("Directory already exists.")
-    }
-  })
-}
 interface socketLogin{
     platform : string;
     email : string;

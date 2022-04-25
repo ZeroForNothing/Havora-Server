@@ -9,6 +9,6 @@
         "preserveConstEnums": true,    
         "moduleResolution": "node",
         "sourceMap": true,
-        "outDir": "Files-Web/dist"
+        "outDir": "dist"
       }
 }

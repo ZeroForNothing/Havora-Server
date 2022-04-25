@@ -1,5 +1,5 @@
 import { Socket } from "../node_modules/socket.io/dist/socket";
-
+let axios = require('axios')
 let User = require('./User')
 const WindowState = require('./Utility/WindowState')
 const bluebird = require('bluebird');
@@ -21,7 +21,8 @@ interface CreatingPostFor{
   picToken : string,
   picType : string,
   name : string,        
-  code : number 
+  code : number ,
+  folderName : string
 }
 
 module.exports = class Connection {
@@ -161,6 +162,8 @@ module.exports = class Connection {
 
     let ChatPage = 1;
     let ChatingWithUserID : string = null
+    let ChatingWithUserName : string = null
+    let ChatingWithUserCode : number = null
     let CreatingPostFor : CreatingPostFor = null;
 
     let connection = this;
@@ -179,9 +182,9 @@ module.exports = class Connection {
     }
     connection.log('Connected with platform: ' + currentPlatform);
 
-    socket.on('registerUser',()=>{
-      socket.emit('registerUser', user.ToJson());
-    })
+    socket.emit('registerUser', user.ToJson());
+    // socket.on('registerUser',()=>{
+    // })
     interface friendListJson{
       friendListJson : string;
     }
@@ -192,33 +195,32 @@ module.exports = class Connection {
     socket.on('tellFriendsImOnline', function () {
       connection.log("Fetching friends list")
       server.database.getFriendsList(userID, (dataD : friendListJson) => {
-        dataD.friendListJson = dataD.friendListJson ? JSON.parse(dataD.friendListJson) : null
-        if (dataD.friendListJson != null) user.friendList = dataD.friendListJson;
+        user.friendList = dataD.friendListJson ? JSON.parse(dataD.friendListJson) : null
         socket.emit('updateFriendList', dataD);
         if (user.friendList.length == 0) return;
         user.friendList.forEach((friend : friendList) => {
           let username = friend.username;
           let userCode = friend.userCode;
-          server.connections.forEach((friendConn : Connection) => {
-            console.log(friendConn.user.name == username && friendConn.user.code == userCode)
-            // if (friendConn.user.name == username && friendConn.user.code == userCode) {
-            //   let friendData = {
-            //     username: user.name,
-            //     userCode: user.code,
-            //     clientDevice: connection.highestPlatform
-            //   }
-            //   friendConn.everySocket('friendIsOnline', friendData)
-            //   server.database.msgsRecieved(friendConn.id, connection.id, () => {
-            //     let myData = {
-            //       username,
-            //       userCode
-            //     }
-            //     console.log(myData)
-            //     friendConn.everySocket('msgsRecieved', myData)
-            //   })
-            //   return;
-            // }
-          })
+          for (let key in server.connections) {
+            if (server.connections.hasOwnProperty(key)) {
+              if (server.connections[key].user.name == username && server.connections[key].user.code == userCode) {
+                let friendData = {
+                  username: user.name,
+                  userCode: user.code,
+                  clientDevice: connection.highestPlatform
+                }
+                server.connections[key].everySocket('friendIsOnline', friendData)
+                server.database.msgsRecieved(server.connections[key].id, connection.id, () => {
+                  let myData = {
+                    username,
+                    userCode
+                  }
+                  server.connections[key].everySocket('msgsRecieved', myData)
+                })
+                return;
+              }
+            }
+          }
         })
       })
     })
@@ -243,6 +245,8 @@ module.exports = class Connection {
     // })
     socket.on('closeChat', function () {
       ChatingWithUserID = null
+      ChatingWithUserName = null
+      ChatingWithUserCode = null
       socket.emit('closeChat')
     });
     interface saveMsg{
@@ -280,9 +284,18 @@ module.exports = class Connection {
               userCode: friendCode
             }
             connection.everySocket('msgsRecieved', myData)
+            friendConn.everySocket('msgsRecievedWhileNotTaklingWithUser', friendData)
           })
         }
       })
+    })
+    socket.on('msgsRecievedWhileNotTaklingWithUser',(data)=>{
+      if(!data.showUnreadMsgs && ChatingWithUserName == data.username && ChatingWithUserCode == data.userCode){
+        socket.emit('msgsRecievedWhileNotTaklingWithUser')
+      }else{
+        data.showUnreadMsgs = true;
+        socket.emit('msgsRecievedWhileNotTaklingWithUser' , data)
+      }
     })
     interface searchForUser{
       friendID : string,
@@ -294,8 +307,10 @@ module.exports = class Connection {
       server.database.searchForUser(userID, data.username, data.userCode, (dataD : searchForUser) => {
         ChatPage = 1;
         ChatingWithUserID = dataD.friendID
+        ChatingWithUserName = data.username
+        ChatingWithUserCode = data.userCode
         socket.emit('OpenWindow', {
-          window: 'Chat',
+          window: windowState.CHAT,
           load : {
             username: data.username, 
             userCode: data.userCode,
@@ -309,24 +324,26 @@ module.exports = class Connection {
       chatLog : string
     }
     socket.on('showChatHistory', function (data) {
-      if (ChatingWithUserID) {
-        if (ChatPage != 1) {
-          ChatPage = ChatPage + 20;
-        } 
-      } else {
-        return;
+      if(!ChatingWithUserID) return;
+
+      if (ChatPage != 1) {
+        ChatPage = ChatPage + 20;
       }
-      let friendID = ChatingWithUserID;
-      connection.log("Fetching chat history"+ data)
-      server.database.showChatHistory(userID, friendID, ChatPage, (dataD : showChatHistory) => {
+      
+      connection.log("Fetching chat history")
+      server.database.showChatHistory(userID, ChatingWithUserID, ChatPage, (dataD : showChatHistory) => {
         socket.emit('showChatHistory', {
           chatLog: dataD.chatLog,
           username: user.name,
           userCode: user.code,
           startPage: ChatPage
         });
-        if (friendID == null) return;
-        let friendConn = server.connections["User_" + friendID]
+        socket.emit("removeMsgsRecievedAlert" , {
+          username: ChatingWithUserName,
+          userCode: ChatingWithUserCode
+        })
+        if (ChatingWithUserID == null) return;
+        let friendConn = server.connections["User_" + ChatingWithUserID]
         if (friendConn){
           let myData = {
             username: user.name,
@@ -558,68 +575,83 @@ module.exports = class Connection {
         code : CreatingPostFor.code        
       })
     })
-    socket.on('startCreatingPost', function (data) {
-      console.log(data)
-      if (data.type == 1 || data.type == 2 || data.type == 3) {
-        let directory = './MediaTempFiles/PostFiles/' + user.picToken;
-        fs.readdirAsync(directory, (err : any, files :any) => {
-          if (err) throw err;
-          for (const file of files) {
-            fs.unlinkAsync(path.join(directory, file), (err : any) => {
-              if (err) console.error(err);
-            });
-          }
-          if (data.type == 1) {
-            CreatingPostFor = {
-              type : 1,
-              id : userID,
-              picToken : null,
-              picType : null,
-              name : null,
-              code: null
-            };
-            socket.emit('OpenWindow', {
-              window: "Post"
-            });
-          } else if (data.type == 2) {
-            CreatingPostFor = {
-              type : 2,
-              id : null,
-              picToken : null,
-              picType : null,
-              name : null,
-              code : null
-            };
-            socket.emit('OpenWindow', {
-              window: "Post"
-            });
-          } else if (data.type == 3 && data.userCode != null && !isNaN(data.userCode) && data.username != null && data.username.trim().length != 0) {
-            server.database.searchForUser(userID, data.username, data.userCode, (dataD : searchForUser) => {
-              if (dataD.friendID != null) {
-                CreatingPostFor = {
-                  type : 3,
-                  id :  dataD.friendID,
-                  picToken : dataD.picToken,
-                  picType : dataD.picType,
-                  name : data.username,        
-                  code : data.userCode 
-                };
-                socket.emit('OpenWindow', {
-                  window: "Post"
-                });
-              } else {
-                socket.emit('ShowError', {
-                  error: "User " + data.username.trim() + "#" + data.userCode.trim() + " either not in your friendlist or doesn't exist"
-                });
-              }
-            })
-          }
-          else {
-            socket.emit('ShowError', {
-              error: "Error selecting post type"
-            });
-          }
+    interface setUserPicType{
+      picType : string,
+      fileName : string
+    }
+    socket.on('updateUserPicture', (data : setUserPicType)=>{
+        if(!data || !data.fileName || !data.picType) return;
+        const profPic = data.picType === "Profile" ? data.fileName : null;
+        const wallPic = data.picType === "Wallpaper"? data.fileName : null;
+        server.database.setUserPicType(userID, profPic, wallPic, async () => {
+          const result = await axios.post('/MovePicDirectory',{
+            picToken : user.picToken,
+            picType : data.picType,
+            fileName : data.fileName
+          })
+          .then(function (res : any) {
+              if(res && res.data && res.data.ok)
+                return true;
+              else
+                return false;
+          }).catch(function (error : any) {
+            if(error) if(error) connection.log("MovePicDirectory: Encountered error no picture moved from temp to directory")
+              return false;
+          });
+          if(!result) return;
+          connection.log(`Updated ${data.picType} with ${data.fileName}`)
+          socket.emit('updateUserPicture',{ picType : data.picType , fileName : data.fileName })
         })
+    })
+    socket.on('startCreatingPost', async function (data : CreatingPostFor) {
+      if (data.type == 1 || data.type == 2 || data.type == 3) {
+        let folderName = ("MediaFolder_" + (new Date()).toUTCString()).replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
+        const createTempDirectory = await axios.post('/CreateTempDirectory',{
+          picToken : user.picToken,
+          folderName
+        })
+        .then(function (res : any) {
+            if(res && res.data && res.data.ok)
+              return true;
+            else
+              return false;
+        }).catch(function (error : any) {
+          if(error) if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
+            return false;
+        });
+        if(!createTempDirectory) return;
+        if (data.type == 1) {
+          CreatingPostFor = { type : 1, id : userID, picToken : null, picType : null, name : null, code: null , folderName };
+          socket.emit('OpenWindow', {
+            window: windowState.POST,
+            load : folderName
+          });
+        } else if (data.type == 2) {
+          CreatingPostFor = { type : 2, id : null, picToken : null, picType : null, name : null, code : null , folderName };
+          socket.emit('OpenWindow', {
+            window: windowState.POST,
+            load : folderName
+          });
+        } else if (data.type == 3 && data.code != null && !isNaN(data.code) && data.name != null && data.name.trim().length != 0) {
+          server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
+            if (dataD.friendID != null) {
+              CreatingPostFor = { type : 3, id :  dataD.friendID, picToken : dataD.picToken, picType : dataD.picType, name : data.name, code : data.code  , folderName};
+              socket.emit('OpenWindow', {
+                window: windowState.POST,
+                load : folderName
+              });
+            } else {
+              socket.emit('ShowError', {
+                error: "User " + data.name.trim() + "#" + data.code + " either not in your friendlist or doesn't exist"
+              });
+            }
+          })
+        }
+        else {
+          socket.emit('ShowError', {
+            error: "Error selecting post type"
+          });
+        }
       } else {
         socket.emit('ShowError', {
           error: "Must select post type"
@@ -651,28 +683,38 @@ module.exports = class Connection {
         });
         return;
       }
-
-      let tempDirectory = './MediaTempFiles/PostFiles/' + user.picToken;
-      const tempPostFiles = await fs.promises.readdir(tempDirectory);
-      let folderName = "MediaFolder_" + (new Date()).toUTCString();
-      folderName = folderName.replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
+      const tempPostFiles = await axios.post('/CheckTempDirectory',{
+        picToken : user.picToken,
+        folderName : CreatingPostFor.folderName
+      })
+      .then(function (res : any) {
+          if(res && res.data && res.data.ok && res.data.tempPostFiles)
+            return res.data.tempPostFiles;
+          else
+            return [];
+      }).catch(function (error : any) : [] {
+        if(error) connection.log("CheckTempDirectory: Encountered error no file collected")
+        return [];
+      });
       
       connection.log("Creating post type "+categoryType)
-      server.database.createPost(userID, CreatingPostFor.id, categoryType, postTitle, postText, postUrl, tempPostFiles, folderName, (dataD : createPost) => {
+      server.database.createPost(userID, CreatingPostFor.id, categoryType, postTitle, postText, postUrl, tempPostFiles, CreatingPostFor.folderName,async (dataD : createPost) => {
         if (dataD.error == null) {
-          
-          let directory = './MediaFiles/PostFiles/' + user.picToken + '/' + folderName;
-          fs.mkdirAsync(directory);
-          if (tempPostFiles != null && tempPostFiles.length > 0){
-            connection.log("Moving post files")
-            tempPostFiles.forEach(function (value : string) {
-              fs.renameAsync(tempDirectory + '/' + value, directory + '/' + value, function (err : any) {
-                if (err) connection.log('ERROR: ' + err);
-                connection.log(`File: ${value}`)
-              });
-            })
-          }
-
+          const filesMoved = await axios.post('/CreateDirectory',{
+            picToken : user.picToken,
+            folderName : CreatingPostFor.folderName,
+            tempPostFiles
+          })
+          .then(function (res : any) {
+            if(res && res.data && res.data.ok)
+              return true;
+            else 
+              return false;
+          }).catch(function (error : any) {
+            if(error) connection.log("CreateDirectory: Encountered error no file Moved")
+            return false;
+          });
+          if(!filesMoved) return;
           if (CreatingPostFor.id == connection.id) WINDOW = windowState.PROFILE
           else if (CreatingPostFor.id == null) WINDOW = windowState.COMMUNITY
           else WINDOW = windowState.PROFILE
@@ -680,27 +722,11 @@ module.exports = class Connection {
           socket.emit('OpenWindow', {
             window: WINDOW
           });
-          connection.log("Post created successfully")
+          connection.log("Finished creating Post in success")
         }
         else{
-          let text = '';
-          if (dataD.error == 1) {
-            text = "Must select a category";
-          } else if (dataD.error == 2) {
-            text = "Must insert a title";
-          } else if (data.error == 3) {
-            text = "Must insert an explanation text"
-          } else if (data.error == 4) {
-            text = "Youtube url entered is not valid";
-          } else if (data.error == 5) {
-            text = "Must wait for video to finish uploading";
-          } else if (data.error == 6) {
-            text = "Must wait for image to finish uploading";
-          } else {
-            text = "Encountered while posting. Try refreshing the page";
-          }
           socket.emit('ShowError', {
-            error: `Error (Create Post / ${dataD.error}): ${text}`
+            error: dataD.error
           });
         }
       })
@@ -904,13 +930,19 @@ module.exports = class Connection {
         socket.emit('promptToDiscardPost');
         return;
       }
+      if(data.widnow != windowState.CHAT){
+        ChatingWithUserID = null
+        ChatingWithUserName = null
+        ChatingWithUserCode = null
+      }
       if (data.window == "Store") {
         // server.database.getSkins(null, 0, 0, (dataD) => {
         //   socket.emit('getSkins', {
         //     skinData: dataD.skinData
         //   });
         // })
-      } else if (data.window == "AccountLink") {
+      }
+      if (data.window == "AccountLink") {
         user.GetAccountLink(connection, server, socket);
       } 
       WINDOW = data.window;
