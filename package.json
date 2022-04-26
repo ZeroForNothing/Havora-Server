@@ -2,7 +2,7 @@
   "name": "zerofornothing-server",
   "version": "1.0.0",
   "description": "",
-  "main": "Files-Web/dist/app.js",
+  "main": "dist/app.js",
   "scripts": {
     "start": "tsc && node dist/app.js",
     "build": "node server.js",

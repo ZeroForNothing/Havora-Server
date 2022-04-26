@@ -5,11 +5,7 @@ require('dotenv').config();
 export {}
 const express = require('express')
 const session = require('express-session')
-const formidable = require('formidable');
-const bluebird = require('bluebird')
-let {
-  nanoid
-} = require('nanoid')
+
 const app = express()
 app.use(express.json())
 app.use(session({
@@ -25,11 +21,7 @@ const io = require("socket.io")(serverManager,
       methods: ["GET", "POST"]
     }
   }
-  );
-  const sql = require('mssql');
-  const fs = bluebird.promisifyAll(require('fs'));
-  const path = require('path');
-  
+  ); 
   
   function serverLog(text : string) {
     console.log("Web Node Server =>", text);
