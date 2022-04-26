@@ -1,3 +1,4 @@
+import axios from "axios";
 import { Socket } from "socket.io";
 
 require('dotenv').config();
@@ -103,34 +104,58 @@ app.post('/CreateUser', (req : any, res : any) => {
     return res.json({
       error: errorLog
     })
-  nodeServer.database.createUser(req.body,(dataD : createUser) => {
-      if (dataD.error == null) {
-        //createPicTokenFile(dataD.picToken);
+  nodeServer.database.createUser(req.body,async (dataD : createUser) => {
+      if (!dataD.error) {
+        const result = await axios.post('/createPicTokenDirectory',{
+          picToken : dataD.picToken
+        }).then(function (response : any) {
+            if(response && response.data && response.data.ok)
+              return true;
+            else
+              return false;
+        }).catch(function (error : any) {
+            if(error) serverLog("createPicTokenDirectory: Encountered error couldn't create picToken directory")
+            return false;
+        });
+        if(result) return res.json({ ok: true })
+        else return res.json({ ok: false })
       }
       return res.json({ 
+        ok: false,
         error : dataD.error
       })
   })
 })
 
 interface userSignIn{
-  error : number
+  error : number,
+  picToken :string
 }
 app.post('/LoginUser', (req : any, res : any) => {
   if(!platformState.isPlatform(req.body.platform)) return;
-    let email = req.body.email;
-    let password = req.body.password;
-    if (email.trim().length == 0 || password.trim().length == 0)
-    return res.json({
-      error: true
-    })
+  let email = req.body.email;
+  let password = req.body.password;
+  if (email.trim().length == 0 || password.trim().length == 0) return res.json({ ok: false })
   serverLog(`Signin with ${email} on ${req.body.platform}`)
-  nodeServer.database.userSignIn(req.body.email,req.body.password,(dataD : userSignIn) => {
-    return res.json({
+  nodeServer.database.userSignIn(req.body.email,req.body.password, async (dataD : userSignIn) => {
+    const result = await axios.post('/createPicTokenDirectory',{
+      picToken : dataD.picToken
+    }).then(function (response : any) {
+        if(response && response.data && response.data.ok)
+          return true;
+        else
+          return false;
+    }).catch(function (error : any) {
+        if(error) serverLog("createPicTokenDirectory: Encountered error couldn't create picToken directory")
+        return false;
+    });
+    if(result) return res.json({ 
+      ok: true,
       email: email,
       platform: req.body.platform,
       error: dataD.error
     })
+    else return res.json({ ok: false })
   })
 })
 interface socketLogin{

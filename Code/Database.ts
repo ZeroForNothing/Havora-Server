@@ -196,6 +196,7 @@ module.exports = class Database {
       return pool.request()
         .input('email', sql.VarChar(50), email)
         .input('password', sql.NVarChar(50), password)
+        .output('picToken', sql.NVarChar(250))
         .output('error', sql.TinyInt)
         .execute('SignIn')
     }).then((result: Output) => {

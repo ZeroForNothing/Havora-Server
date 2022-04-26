@@ -595,7 +595,7 @@ module.exports = class Connection {
               else
                 return false;
           }).catch(function (error : any) {
-            if(error) if(error) connection.log("MovePicDirectory: Encountered error no picture moved from temp to directory")
+              if(error) connection.log("MovePicDirectory: Encountered error no picture moved from temp to directory")
               return false;
           });
           if(!result) return;
@@ -616,7 +616,7 @@ module.exports = class Connection {
             else
               return false;
         }).catch(function (error : any) {
-          if(error) if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
+           if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
             return false;
         });
         if(!createTempDirectory) return;
