@@ -227,12 +227,14 @@ module.exports = class Database {
       console.log("Database cought error at 13: " + err);
     })
   }
-  saveMsg(userID : string, friendID : string, message : string, callback : Callback) {
+  saveMsg(userID : string, friendID : string, message : string, mediaFolder : string, mediaFiles : string , callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input("friendID", sql.BigInt, friendID)
         .input('message', sql.NVarChar(300), message)
+        .input('mediaFiles', sql.NVarChar(sql.MAX), mediaFiles)
+        .input('mediaFolder', sql.NVarChar(50), mediaFolder)
         .output("textID", sql.BigInt)
         .output("unSeenMsgsCount", sql.Int)
         .execute('saveMsg')
@@ -249,6 +251,7 @@ module.exports = class Database {
         .input('friendID', sql.BigInt, friendID)
         .input('startPage', sql.Int, startPage)
         .output('chatLog', sql.NVarChar(sql.MAX))
+        .output("unSeenMsgsCount", sql.Int)
         .execute('showChatHistory')
     }).then((result: Output)=> {
       callback(result.output)

@@ -160,7 +160,6 @@ module.exports = class Connection {
     let ViewingCommentID : string = null;
     let ViewingProfile : userSmallData = null;
 
-    let ChatPage = 1;
     let ChatingWithUserID : string = null
     let ChatingWithUserName : string = null
     let ChatingWithUserCode : number = null
@@ -249,18 +248,81 @@ module.exports = class Connection {
       ChatingWithUserCode = null
       socket.emit('closeChat')
     });
+    socket.on('createChatDirectory', async ()=>{
+      let folderName : string;
+      folderName = ("MediaFolder_" + (new Date()).toUTCString()).replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
+      const result = await axios.post('/CreateTempDirectory',{
+        picToken : user.picToken,
+        folderName,
+        directoryType : 'ChatFiles'
+      }).then(function (res : any) {
+          if(res && res.data && res.data.ok)
+            return true;
+          else
+            return false;
+      }).catch(function (error : any) {
+          if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
+          return false;
+      });
+      if(result) socket.emit('createChatDirectory', {folderName} )
+      else socket.emit('createChatDirectory')
+    })
     interface saveMsg{
       textID : string,
       unSeenMsgsCount : number
     }
-    socket.on('sendMessage', function (data) {
-      if (!data.message || !ChatingWithUserID) return;
+    socket.on('sendMessage', async function (data) {
+      if (!ChatingWithUserID) return;
+      if(!data && !data.message && !data.folderName) return;
+      let folderName = data.folderName;
+      let tempFiles : string[];
+      if(!data.message && folderName){
+        tempFiles = await axios.post('/CheckTempDirectory',{
+          picToken : user.picToken,
+          folderName : folderName,
+          directoryType : "ChatFiles"
+        })
+        .then(function (res : any) {
+            if(res && res.data && res.data.ok && res.data.tempFiles)
+              return res.data.tempFiles;
+            else
+              return [];
+        }).catch(function (error : any) : [] {
+          if(error) connection.log("CheckTempDirectory: Encountered error no file collected")
+          return [];
+        });
+      }
+
       connection.log(`Sending message to userID ${ChatingWithUserID}`)
-      server.database.saveMsg(userID, ChatingWithUserID, data.message.trim(), (dataD : saveMsg) => {
+      server.database.saveMsg(userID, ChatingWithUserID, data.message , folderName , tempFiles, async (dataD : saveMsg) => {
+        let isMedia = folderName && tempFiles && tempFiles.length != 0
+        if(isMedia){
+          const filesMoved : boolean = await axios.post('/CreateDirectory',{
+            picToken : user.picToken,
+            folderName : folderName,
+            directoryType : "ChatFiles",
+            tempFiles
+          })
+          .then(function (res : any) {
+            if(res && res.data && res.data.ok)
+              return true;
+            else 
+              return false;
+          }).catch(function (error : any) {
+            if(error) connection.log("CreateDirectory: Encountered error no file Moved")
+            return false;
+          });
+          if(!filesMoved) return;
+        }
+
+
         let msgData = {
           textID: dataD.textID,
           oldID : data.id,
-          myself: true
+          myself: true,
+          folderName,
+          tempFiles,
+          isMedia
         }
         connection.everySocket('sendMessage', msgData)
         let friendConn = server.connections["User_" + ChatingWithUserID]
@@ -274,7 +336,10 @@ module.exports = class Connection {
           username: user.name,
           userCode: user.code,
           unSeenMsgsCount: dataD.unSeenMsgsCount,
-          myself: false
+          myself: false,
+          folderName,
+          tempFiles,
+          isMedia
         }
         friendConn.everySocket('sendMessage', friendData)
         if (friendConn.mobileSocket != null || friendConn.webSocket.length != 0 || friendConn.clientSocket != null || friendConn.gameSocket != null) {
@@ -305,7 +370,6 @@ module.exports = class Connection {
     socket.on('showChatWindow', function (data) {
       if (!data || !data.username || !data.userCode) return;
       server.database.searchForUser(userID, data.username, data.userCode, (dataD : searchForUser) => {
-        ChatPage = 1;
         ChatingWithUserID = dataD.friendID
         ChatingWithUserName = data.username
         ChatingWithUserCode = data.userCode
@@ -321,22 +385,20 @@ module.exports = class Connection {
       })
     })
     interface showChatHistory{
-      chatLog : string
+      chatLog : string,
+      unSeenMsgsCount : number
     }
     socket.on('showChatHistory', function (data) {
       if(!ChatingWithUserID) return;
 
-      if (ChatPage != 1) {
-        ChatPage = ChatPage + 20;
-      }
-      
       connection.log("Fetching chat history")
-      server.database.showChatHistory(userID, ChatingWithUserID, ChatPage, (dataD : showChatHistory) => {
+      server.database.showChatHistory(userID, ChatingWithUserID, data.page, (dataD : showChatHistory) => {
         socket.emit('showChatHistory', {
           chatLog: dataD.chatLog,
           username: user.name,
           userCode: user.code,
-          startPage: ChatPage
+          page: data.page + 25,
+          unSeenMsgsCount : dataD.unSeenMsgsCount
         });
         socket.emit("removeMsgsRecievedAlert" , {
           username: ChatingWithUserName,
@@ -606,9 +668,10 @@ module.exports = class Connection {
     socket.on('startCreatingPost', async function (data : CreatingPostFor) {
       if (data.type == 1 || data.type == 2 || data.type == 3) {
         let folderName = ("MediaFolder_" + (new Date()).toUTCString()).replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
-        const createTempDirectory = await axios.post('/CreateTempDirectory',{
+        const result = await axios.post('/CreateTempDirectory',{
           picToken : user.picToken,
-          folderName
+          folderName,
+          directoryType : 'PostFiles'
         })
         .then(function (res : any) {
             if(res && res.data && res.data.ok)
@@ -619,7 +682,7 @@ module.exports = class Connection {
            if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
             return false;
         });
-        if(!createTempDirectory) return;
+        if(!result) return;
         if (data.type == 1) {
           CreatingPostFor = { type : 1, id : userID, picToken : null, picType : null, name : null, code: null , folderName };
           socket.emit('OpenWindow', {
@@ -683,38 +746,42 @@ module.exports = class Connection {
         });
         return;
       }
-      const tempPostFiles = await axios.post('/CheckTempDirectory',{
+      const tempFiles = await axios.post('/CheckTempDirectory',{
         picToken : user.picToken,
-        folderName : CreatingPostFor.folderName
+        folderName : CreatingPostFor.folderName,
+        directoryType : 'PostFiles'
       })
       .then(function (res : any) {
-          if(res && res.data && res.data.ok && res.data.tempPostFiles)
-            return res.data.tempPostFiles;
+          if(res && res.data && res.data.ok && res.data.tempFiles)
+            return res.data.tempFiles;
           else
             return [];
       }).catch(function (error : any) : [] {
         if(error) connection.log("CheckTempDirectory: Encountered error no file collected")
         return [];
       });
-      
+
       connection.log("Creating post type "+categoryType)
-      server.database.createPost(userID, CreatingPostFor.id, categoryType, postTitle, postText, postUrl, tempPostFiles, CreatingPostFor.folderName,async (dataD : createPost) => {
+      server.database.createPost(userID, CreatingPostFor.id, categoryType, postTitle, postText, postUrl, tempFiles, CreatingPostFor.folderName,async (dataD : createPost) => {
         if (dataD.error == null) {
-          const filesMoved = await axios.post('/CreateDirectory',{
-            picToken : user.picToken,
-            folderName : CreatingPostFor.folderName,
-            tempPostFiles
-          })
-          .then(function (res : any) {
-            if(res && res.data && res.data.ok)
-              return true;
-            else 
+          if(CreatingPostFor.folderName && tempFiles && tempFiles.length != 0){
+            const filesMoved = await axios.post('/CreateDirectory',{
+              picToken : user.picToken,
+              folderName : CreatingPostFor.folderName,
+              directoryType : 'PostFiles',
+              tempFiles
+            })
+            .then(function (res : any) {
+              if(res && res.data && res.data.ok)
+                return true;
+              else 
+                return false;
+            }).catch(function (error : any) {
+              if(error) connection.log("CreateDirectory: Encountered error no file Moved")
               return false;
-          }).catch(function (error : any) {
-            if(error) connection.log("CreateDirectory: Encountered error no file Moved")
-            return false;
-          });
-          if(!filesMoved) return;
+            });
+            if(!filesMoved) return;
+          }
           if (CreatingPostFor.id == connection.id) WINDOW = windowState.PROFILE
           else if (CreatingPostFor.id == null) WINDOW = windowState.COMMUNITY
           else WINDOW = windowState.PROFILE
