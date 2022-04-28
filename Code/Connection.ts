@@ -272,6 +272,7 @@ module.exports = class Connection {
       unSeenMsgsCount : number
     }
     socket.on('sendMessage', async function (data) {
+      console.log(data)
       if (!ChatingWithUserID) return;
       if(!data && !data.message && !data.folderName) return;
       let folderName = data.folderName;

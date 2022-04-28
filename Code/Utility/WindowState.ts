@@ -8,6 +8,7 @@ module.exports = class WindowState  {
     STORE = 'Store';
     LIBRARY = 'Library';
     ACCOUNTLINK = 'AccountLink';
+    SETTINGS = 'Settings';
 
     //current state of the window
     defaultState : string ;
