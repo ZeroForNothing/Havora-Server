@@ -248,36 +248,17 @@ module.exports = class Connection {
       ChatingWithUserCode = null
       socket.emit('closeChat')
     });
-    socket.on('createChatDirectory', async ()=>{
-      let folderName : string;
-      folderName = ("MediaFolder_" + (new Date()).toUTCString()).replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
-      const result = await axios.post('/CreateTempDirectory',{
-        picToken : user.picToken,
-        folderName,
-        directoryType : 'ChatFiles'
-      }).then(function (res : any) {
-          if(res && res.data && res.data.ok)
-            return true;
-          else
-            return false;
-      }).catch(function (error : any) {
-          if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
-          return false;
-      });
-      if(result) socket.emit('createChatDirectory', {folderName} )
-      else socket.emit('createChatDirectory')
-    })
+  
     interface saveMsg{
       textID : string,
       unSeenMsgsCount : number
     }
     socket.on('sendMessage', async function (data) {
-      console.log(data)
       if (!ChatingWithUserID) return;
       if(!data && !data.message && !data.folderName) return;
       let folderName = data.folderName;
       let tempFiles : string[];
-      if(!data.message && folderName){
+      if(folderName){
         tempFiles = await axios.post('/CheckTempDirectory',{
           picToken : user.picToken,
           folderName : folderName,
@@ -668,22 +649,20 @@ module.exports = class Connection {
     })
     socket.on('startCreatingPost', async function (data : CreatingPostFor) {
       if (data.type == 1 || data.type == 2 || data.type == 3) {
-        let folderName = ("MediaFolder_" + (new Date()).toUTCString()).replace(/\s/g, '').replace(/\:/g, "").replace(',', '')
-        const result = await axios.post('/CreateTempDirectory',{
+        const folderName = await axios.post('/CreateTempDirectory',{
           picToken : user.picToken,
-          folderName,
           directoryType : 'PostFiles'
         })
         .then(function (res : any) {
-            if(res && res.data && res.data.ok)
-              return true;
+            if(res && res.data && res.data.ok && res.data.folderName)
+              return res.data.folderName;
             else
               return false;
         }).catch(function (error : any) {
            if(error) connection.log("CreateTempDirectory: Encountered error no temp directory created")
             return false;
         });
-        if(!result) return;
+        if(!folderName) return;
         if (data.type == 1) {
           CreatingPostFor = { type : 1, id : userID, picToken : null, picType : null, name : null, code: null , folderName };
           socket.emit('OpenWindow', {
