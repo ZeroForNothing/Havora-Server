@@ -28,7 +28,7 @@ const io = require("socket.io")(serverManager,
     console.log("Web Node Server =>", text);
   }
   
-  serverManager.listen(process.env.WEBPORT, () => serverLog(`Listening on port ${process.env.WEBPORT}`));
+  serverManager.listen(process.env.PORT, () => serverLog(`Listening on port ${process.env.PORT}`));
   
   let WebServer = require('./Code/server')
   let nodeServer = new WebServer();
