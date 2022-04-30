@@ -154,7 +154,7 @@ module.exports = class Connection {
 
   createSocialEvents(currentPlatform : string) {
     let windowState = new WindowState();
-    let WINDOW = windowState.defaultState;
+    let WINDOW : string = windowState.defaultState;
 
     let ViewingPostID : string = null;
     let ViewingCommentID : string = null;
@@ -345,12 +345,16 @@ module.exports = class Connection {
     }
     socket.on('showChatWindow', function (data) {
       if (!data || !data.username || !data.userCode) return;
+
       server.database.searchForUser(userID, data.username, data.userCode, (dataD : searchForUser) => {
+        let oldUserID = ChatingWithUserID
+        if(oldUserID === dataD.friendID) return;
         ChatingWithUserID = dataD.friendID
         ChatingWithUserName = data.username
-        ChatingWithUserCode = data.userCode
+        ChatingWithUserCode = data.userCode;
+        WINDOW = windowState.CHAT;
         socket.emit('OpenWindow', {
-          window: windowState.CHAT,
+          window: WINDOW,
           load : {
             username: data.username, 
             userCode: data.userCode,
@@ -358,18 +362,23 @@ module.exports = class Connection {
             picType:dataD.picType
           }
         });
+        if(WINDOW == windowState.CHAT){
+          socket.emit("refreshChat")
+        }
       })
     })
     interface showChatHistory{
       chatLog : string,
       unSeenMsgsCount : number
     }
-    socket.on('showChatHistory', function (data) {
+    socket.on('showChatHistory', (data : any) => {
       if(!ChatingWithUserID) return;
 
-      connection.log("Fetching chat history")
+      connection.log("Fetching chat history for user "+ ChatingWithUserID)
       server.database.showChatHistory(userID, ChatingWithUserID, data.page, (dataD : showChatHistory) => {
+
         socket.emit('showChatHistory', {
+          refresh : data.refresh,
           chatLog: dataD.chatLog,
           username: user.name,
           userCode: user.code,
@@ -588,6 +597,7 @@ module.exports = class Connection {
         WINDOW = windowState.PROFILE
       }
       CreatingPostFor = null;
+
       socket.emit('OpenWindow', {
         window: WINDOW
       });
@@ -643,16 +653,17 @@ module.exports = class Connection {
             return false;
         });
         if(!folderName) return;
+        WINDOW = windowState.POST;
         if (data.type == 1) {
           CreatingPostFor = { type : 1, id : userID, picToken : null, picType : null, name : null, code: null , folderName };
           socket.emit('OpenWindow', {
-            window: windowState.POST,
+            window: WINDOW,
             load : folderName
           });
         } else if (data.type == 2) {
           CreatingPostFor = { type : 2, id : null, picToken : null, picType : null, name : null, code : null , folderName };
           socket.emit('OpenWindow', {
-            window: windowState.POST,
+            window: WINDOW,
             load : folderName
           });
         } else if (data.type == 3 && data.code != null && !isNaN(data.code) && data.name != null && data.name.trim().length != 0) {
@@ -660,7 +671,7 @@ module.exports = class Connection {
             if (dataD.friendID != null) {
               CreatingPostFor = { type : 3, id :  dataD.friendID, picToken : dataD.picToken, picType : dataD.picType, name : data.name, code : data.code  , folderName};
               socket.emit('OpenWindow', {
-                window: windowState.POST,
+                window: WINDOW,
                 load : folderName
               });
             } else {
@@ -805,7 +816,8 @@ module.exports = class Connection {
             ChatingWithUserID = null
             ChatingWithUserName = null
             ChatingWithUserCode = null
-            socket.emit('OpenWindow', { window: windowState.HOME });
+            WINDOW = windowState.HOME;
+            socket.emit('OpenWindow', { window: WINDOW });
           }
           
           user.friendList.forEach((friend : friendList, i : number) => {
@@ -962,7 +974,7 @@ module.exports = class Connection {
         socket.emit('promptToDiscardPost');
         return;
       }
-      if(data.widnow != windowState.CHAT){
+      if(data.window != windowState.CHAT){
         ChatingWithUserID = null
         ChatingWithUserName = null
         ChatingWithUserCode = null
