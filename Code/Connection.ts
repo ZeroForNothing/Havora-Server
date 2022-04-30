@@ -268,7 +268,7 @@ module.exports = class Connection {
           return [];
         });
       }
-
+      if(folderName && tempFiles.length == 0) return;
       connection.log(`Sending message to userID ${ChatingWithUserID}`)
       server.database.saveMsg(userID, ChatingWithUserID, data.message , folderName , tempFiles, async (dataD : saveMsg) => {
         let isMedia = folderName && tempFiles && tempFiles.length != 0
