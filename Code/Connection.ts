@@ -242,12 +242,6 @@ module.exports = class Connection {
     //     socket.emit('SignOut');
     //   })
     // })
-    socket.on('closeChat', function () {
-      ChatingWithUserID = null
-      ChatingWithUserName = null
-      ChatingWithUserCode = null
-      socket.emit('closeChat')
-    });
   
     interface saveMsg{
       textID : string,
@@ -411,47 +405,33 @@ module.exports = class Connection {
       })
     })
     socket.on('deleteMsg', function (data) {
-      let textID = data.textID.replace('textID_', '')
+      let textID = data.textID;
       if (isNaN(textID)) return;
       if (!ChatingWithUserID) return;
       server.database.deleteMsg(userID, textID, () => {
-        let deletemsgs = {
-          textID: textID,
-          myself: true
+        let myData = {
+          textID: textID
         }
-        connection.everySocket('deleteMsg', deletemsgs)
+        connection.everySocket('deleteMsg', myData)
         let friendConn = server.connections["User_" + ChatingWithUserID]
         if (friendConn == null) return;
-        let myData = {
-          textID: textID,
-          username: user.name,
-          userCode: user.code,
-          myself: false
-        }
         friendConn.everySocket('deleteMsg', myData)
       })
     })
     socket.on('editMsg', function (data) {
-      let textID = data.textID.replace('textID_', '')
+      let textID = data.textID
       if (data.message == null) return;
       let message = data.message.trim()
       if (isNaN(textID) || message.length == 0) return;
       if (!ChatingWithUserID) return;
       server.database.editMsg(userID, textID, message, () => {
-        let editMsgs = {
-          textID: textID,
-          myself: true
-        }
-        connection.everySocket('editMsg', editMsgs)
-        let friendConn = server.connections["User_" + ChatingWithUserID]
-        if (friendConn == null) return;
         let myData = {
           textID: textID,
-          message: message,
-          username: user.name,
-          userCode: user.code,
-          myself: false
+          message : message
         }
+        connection.everySocket('editMsg', myData)
+        let friendConn = server.connections["User_" + ChatingWithUserID]
+        if (friendConn == null) return;
         friendConn.everySocket('editMsg', myData)
       })
     })
@@ -821,7 +801,12 @@ module.exports = class Connection {
         }
         if (dataD.requestHandler == 0) {
           //remove friend or unfriend
-          if (friendID == ChatingWithUserID) socket.emit('closeChat')
+          if (friendID == ChatingWithUserID) {
+            ChatingWithUserID = null
+            ChatingWithUserName = null
+            ChatingWithUserCode = null
+            socket.emit('OpenWindow', { window: windowState.HOME });
+          }
           
           user.friendList.forEach((friend : friendList, i : number) => {
             if (username == friend.username && userCode == friend.userCode) {
