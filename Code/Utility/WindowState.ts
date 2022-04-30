@@ -20,7 +20,7 @@ module.exports = class WindowState  {
   }
   isWindow(window : string){
     if(window === this.HOME || window === this.PROFILE || window === this.COMMUNITY || window === this.POST || window === this.CHAT || window === this.STORE 
-      || window === this.LIBRARY || window === this.ACCOUNTLINK)
+      || window === this.LIBRARY || window === this.ACCOUNTLINK || window === this.SETTINGS)
       return true;
     else return false;
   }
