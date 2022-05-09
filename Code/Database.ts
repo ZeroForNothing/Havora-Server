@@ -18,7 +18,7 @@ interface createUser{
   password :string,
   confirmPassword : string,
   gender :number,
-  username : string,
+  name : string,
   firstName: string,
   lastName : string,
   date : string,
@@ -38,9 +38,9 @@ module.exports = class Database {
         .output('code', sql.Int)
         .output('email', sql.VarChar(50))
         .output('newAcc', sql.TinyInt)
-        .output('picToken', sql.VarChar(250))
-        .output('profilePicType', sql.NVarChar(50))
-        .output('wallpaperPicType', sql.NVarChar(50))
+        .output('token', sql.VarChar(250))
+        .output('prof', sql.NVarChar(50))
+        .output('wall', sql.NVarChar(50))
         .output('zeroCoin', sql.Int)
         .output('normalCoin', sql.Int)
         .output('experience', sql.BigInt)
@@ -54,16 +54,16 @@ module.exports = class Database {
       console.log("Database 1 cought error at 1: " + err);
     })
   }
-  getUserProfile(userID : string, friendname : string, userCode : number, callback : Callback) {
+  getUserProfile(userID : string, friendname : string, code : number, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendName', sql.NVarChar(50), friendname)
-        .input('userCode', sql.Int, userCode)
-        .output('picToken', sql.NVarChar(250))
-        .output('profilePicType', sql.NVarChar(50))
-        .output('wallpaperPicType', sql.NVarChar(50))
+        .input('code', sql.Int, code)
+        .output('token', sql.NVarChar(250))
+        .output('prof', sql.NVarChar(50))
+        .output('wall', sql.NVarChar(50))
         .output('friendRequest', sql.Int)
         .output('friendID', sql.BigInt)
         .execute('getUserProfile')
@@ -74,13 +74,13 @@ module.exports = class Database {
       console.log("Database 1 cought error at 2: " + err);
     })
   }
-  setUserPicType(userID : string, picType : string, wallPic : string, callback : Callback) {
+  setUserPicture(userID : string, prof : string, wallPic : string, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
       .input('userID', sql.BigInt, userID)
-        .input('profilePicType', sql.NVarChar(50), picType)
-        .input('wallpaperPicType', sql.NVarChar(50), wallPic)
-        .execute('setUserPicType')
+        .input('prof', sql.NVarChar(50), prof)
+        .input('wall', sql.NVarChar(50), wallPic)
+        .execute('setUserPicture')
     }).then((result: Output)=> {
       callback(null);
     }).catch((err: any)=> {
@@ -115,20 +115,6 @@ module.exports = class Database {
     })
   }
 
-  userSignOut(userID : string, platform : string, callback : Callback) { //keeps getting called for every refresh
-    sql.connect(config).then((pool : any) => {
-      // Stored procedure
-      return pool.request()
-        .input('userID', sql.BigInt, userID)
-        .input('platform', sql.TinyInt, platform)
-        .execute('userSignOut')
-    }).then((result: Output)=> {
-      callback(null)
-    }).catch((err: any)=> {
-      // ... error checks
-      console.log("Database error at 6: " + err);
-    })
-  }
   getFriendsList(userID : string, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
@@ -196,7 +182,7 @@ module.exports = class Database {
       return pool.request()
         .input('email', sql.VarChar(50), email)
         .input('password', sql.NVarChar(50), password)
-        .output('picToken', sql.NVarChar(250))
+        .output('token', sql.NVarChar(250))
         .output('error', sql.TinyInt)
         .execute('SignIn')
     }).then((result: Output) => {
@@ -205,12 +191,12 @@ module.exports = class Database {
       console.log("Database cought error at 12: " + err);
     })
   }
-  respondToFriendRequest(userID : string, response : number, friendName : string, userCode  :number, callback : Callback) {
+  respondToFriendRequest(userID : string, response : number, friendName : string, code  :number, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
-        .input('username', sql.VarChar(50), friendName)
-        .input('userCode', sql.Int, userCode)
+        .input('name', sql.VarChar(50), friendName)
+        .input('code', sql.Int, code)
         .input('Response', sql.TinyInt, response)
         .output('error', sql.TinyInt)
         .output('friendJson', sql.NVarChar(sql.MAX))
@@ -297,12 +283,12 @@ module.exports = class Database {
       console.log("Database cought error at 18: " + err);
     })
   }
-  unlinkAccountLinks(userID : string, username : string, userCode : number, callback : Callback) {
+  unlinkAccountLinks(userID : string, name : string, code : number, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('UserID', sql.BigInt, userID)
-        .input('username', sql.VarChar(50), username)
-        .input('userCode', sql.Int, userCode)
+        .input('name', sql.VarChar(50), name)
+        .input('code', sql.Int, code)
         .output('friendID', sql.BigInt)
         .execute('unlinkAccountLinks')
     }).then((result: Output)=> {
@@ -346,8 +332,8 @@ module.exports = class Database {
         .input('userID', sql.BigInt, userID)
         .input('email', sql.VarChar(50), email)
         .input('Password', sql.VarChar(50), password)
-        .output('username', sql.VarChar(50))
-        .output('userCode', sql.Int)
+        .output('name', sql.VarChar(50))
+        .output('code', sql.Int)
         .output('friendID', sql.BigInt)
         .execute('setAccountLinks')
     }).then((result: Output)=> {
@@ -356,12 +342,12 @@ module.exports = class Database {
       console.log("Database cought error at 22: " + err);
     })
   }
-  accessAccountLinks(userID : string, username : string, userCode : number, platform : string, callback : Callback) {
+  accessAccountLinks(userID : string, name : string, code : number, platform : string, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
-        .input('username', sql.NVarChar(50), username)
-        .input('userCode', sql.Int, userCode)
+        .input('name', sql.NVarChar(50), name)
+        .input('code', sql.Int, code)
         .input('platform', sql.TinyInt, platform)
         .output('AuthToken', sql.NVarChar(50))
         .execute('accessAccountLinks')
@@ -477,26 +463,16 @@ module.exports = class Database {
       console.log("Database cought error at 30: " + err);
     })
   }
-  userDisconnected(userID:string, platform : string) {
-    sql.connect(config).then((pool : any) => {
-      return pool.request()
-        .input('userID', sql.BigInt, userID)
-        .input('platform', sql.TinyInt, platform)
-        .execute('userDisconnected')
-    }).catch((err: any)=> {
-      // ... error checks
-      console.log("Database cought error at 31: " + err);
-    })
-  }
-  searchForUser(userID : string, username : string, userCode : number, callback : Callback) {
+
+  searchForUser(userID : string, name : string, code : number, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('currentUserID', sql.BigInt, userID)
-        .input('username', sql.VarChar(50), username)
-        .input('userCode', sql.Int, userCode)
+        .input('name', sql.VarChar(50), name)
+        .input('code', sql.Int, code)
         .output('friendID', sql.BigInt)
-        .output('picToken', sql.VarChar(250))
-        .output('picType', sql.NVarChar(50))
+        .output('token', sql.VarChar(250))
+        .output('prof', sql.NVarChar(50))
         .execute('searchForUser')
     }).then((result: Output)=> {
       callback(result.output)
@@ -529,7 +505,7 @@ module.exports = class Database {
         .input('userID', sql.BigInt, userID)
         .output('firstname', sql.VarChar(50))
         .output('lastname', sql.VarChar(50))
-        .output('username', sql.VarChar(50))
+        .output('name', sql.VarChar(50))
         .output('email', sql.VarChar(250))
         .output('gender', sql.TinyInt)
         .output('birthDate', sql.Date)
@@ -610,14 +586,14 @@ module.exports = class Database {
       console.log("Database cought error at 39: " + err);
     })
   }
-  getTopPosts(userID : string, categoryID:number, username : string, userCode : number, startPage : number, callback : Callback) {
+  getTopPosts(userID : string, categoryID:number, name : string, code : number, startPage : number, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       // Stored procedure
       return pool.request()
         .input('viewerUserID', sql.BigInt, userID)
         .input('categoryID', sql.Int, categoryID)
-        .input('username', sql.VarChar(50), username)
-        .input('userCode', sql.Int, userCode)
+        .input('name', sql.VarChar(50), name)
+        .input('code', sql.Int, code)
         .input('startPage', sql.Int, startPage)
         .output('categoryName', sql.NVarChar(50))
         .output('postsList', sql.NVarChar(sql.MAX))
@@ -638,9 +614,9 @@ module.exports = class Database {
         .input('email', sql.VarChar(250), userData.email)
         .input('password', sql.VarChar(50), userData.password)
         .input('gender', sql.TinyInt, userData.gender)
-        .input('username', sql.VarChar(50), userData.username)
+        .input('name', sql.VarChar(50), userData.name)
         .input('birthDate', sql.Date, userData.date)
-        .output('picToken', sql.VarChar(250))
+        .output('token', sql.VarChar(250))
         .output('error', sql.TinyInt)
         .execute('createUser')
     }).then((result: Output) => {

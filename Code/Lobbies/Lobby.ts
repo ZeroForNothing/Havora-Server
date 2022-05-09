@@ -26,7 +26,7 @@ module.exports = class Lobby extends LobbyBase {
   onEnterLobby(connection = Connection) {
     let lobby = this;
     let alreadyInLobby = false;
-    connection.lobby = this;
+
     lobby.connections.forEach((tempConn : typeof Connection) => {
       if (tempConn.id == connection.id) {
         alreadyInLobby = true;
@@ -37,15 +37,17 @@ module.exports = class Lobby extends LobbyBase {
 
     if (!alreadyInLobby) {
       lobby.connections.push(connection);
+      connection.lobby.push(lobby.name);
     }
-    connection.lobby = lobby;
     connection.everySocket.join(lobby.id);
+    connection.everySocket("onEnterLobby" , {name : this.name})
     // do enter lobby behavior
     connection.log("Joined Lobby ("+ lobby.id+ ")")
   }
 
   onLeaveLobby(connection = Connection) {
     let lobby = this;
+    connection.everySocket.leave(lobby.id);
     // do leave lobby behavior and remove connection from lobby
     connection.log("Left Lobby ("+ lobby.id+ ")")
   }

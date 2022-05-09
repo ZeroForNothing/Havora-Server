@@ -31,13 +31,13 @@ const io = require("socket.io")(serverManager,
   serverManager.listen(process.env.PORT, () => serverLog(`Listening on port ${process.env.PORT}`));
   
   let WebServer = require('./Code/server')
-  let nodeServer = new WebServer();
+  let nodeServer = new WebServer(io);
   
   const PlatformState = require('./Code/Utility/PlatformState')
   let platformState = new PlatformState();
 
 interface createUser{
-  picToken : string,
+  token : string,
   error : number
 }
 app.post('/CreateUser', (req : any, res : any) => {
@@ -45,7 +45,7 @@ app.post('/CreateUser', (req : any, res : any) => {
   let firstName = req.body.firstName;
   let lastName = req.body.lastName;
   let email = req.body.email;
-  let username = req.body.username;
+  let name = req.body.name;
   let password = req.body.password;
   let confPassword = req.body.confPassword;
   let gender = req.body.gender;
@@ -73,11 +73,11 @@ app.post('/CreateUser', (req : any, res : any) => {
   else if (!emailRegex.test(email.trim())) {
     errorLog = "Invalid email";
   }
-  else if (username.trim().length == 0) {
-    errorLog = "Insert username";
+  else if (name.trim().length == 0) {
+    errorLog = "Insert name";
   }
-  else if (!nameRegex.test(username.trim())) {
-    errorLog = "Invalid username";
+  else if (!nameRegex.test(name.trim())) {
+    errorLog = "Invalid name";
   }
   else if (password.trim().length == 0) {
     errorLog = "Insert password";
@@ -107,14 +107,14 @@ app.post('/CreateUser', (req : any, res : any) => {
   nodeServer.database.createUser(req.body,async (dataD : createUser) => {
       if (!dataD.error) {
         const result = await axios.post('/createPicTokenDirectory',{
-          picToken : dataD.picToken
+          token : dataD.token
         }).then(function (response : any) {
             if(response && response.data && response.data.ok)
               return true;
             else
               return false;
         }).catch(function (error : any) {
-            if(error) serverLog("createPicTokenDirectory: Encountered error couldn't create picToken directory")
+            if(error) serverLog("createPicTokenDirectory: Encountered error couldn't create token directory")
             return false;
         });
         if(result) return res.json({ ok: true })
@@ -129,7 +129,7 @@ app.post('/CreateUser', (req : any, res : any) => {
 
 interface userSignIn{
   error : number,
-  picToken :string
+  token :string
 }
 app.post('/LoginUser', (req : any, res : any) => {
   if(!platformState.isPlatform(req.body.platform)) return;
@@ -139,14 +139,14 @@ app.post('/LoginUser', (req : any, res : any) => {
   serverLog(`Signin with ${email} on ${req.body.platform}`)
   nodeServer.database.userSignIn(req.body.email,req.body.password, async (dataD : userSignIn) => {
     const result = await axios.post('/createPicTokenDirectory',{
-      picToken : dataD.picToken
+      token : dataD.token
     }).then(function (response : any) {
         if(response && response.data && response.data.ok)
           return true;
         else
           return false;
     }).catch(function (error : any) {
-        if(error) serverLog("createPicTokenDirectory: Encountered error couldn't create picToken directory")
+        if(error) serverLog("createPicTokenDirectory: Encountered error couldn't create token directory")
         return false;
     });
     if(result) return res.json({ 

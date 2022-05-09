@@ -3,10 +3,9 @@ module.exports = class PlatformState  {
     CLIENT = 'Client';
     WEBSITE = 'Website';
     MOBILE = 'Mobile';
-    currentState : string;
+    currentState ?: string;
     constructor(){ 
       //current state of the lobby
-      this.currentState = null;
     }
     checkHigherPlatform(currentHighState : string , platform : string){
         if(platform === this.CLIENT){

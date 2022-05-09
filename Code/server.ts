@@ -16,8 +16,9 @@ module.exports = class Server {
   platformState : typeof PlatformState;
   lobbys : any;
   lobbyBase : typeof LobbyBase;
+  io : any;
 
-  constructor() {
+  constructor(io : any) {
       this.connections = [];
       this.database = new Database(),
       this.platformState = new PlatformState(),
@@ -26,6 +27,8 @@ module.exports = class Server {
       this.lobbyBase = new LobbyBase()
       this.lobbyBase.id = "Lobby";
       this.lobbys["Lobby"] = this.lobbyBase;
+
+      this.io = io;
   }
   
 
@@ -48,33 +51,33 @@ module.exports = class Server {
           return;
         }
         //Add also ClientMustBeOpened when opening games
-        if (server.connections["User_" + data.id]) {
+        if (server.connections[data.id.toString()]) {
           //Dont forget to tell the old user new socket got opened if it was opened before close it
-          server.connections["User_" + data.id].startOtherPlatform(socket, platform, server);
+          server.connections[data.id.toString()].startOtherPlatform(socket, platform, server);
         }
         else {
-          server.connections["User_" + data.id] = new Connection(socket, server, platform, data)
+          server.connections[data.id.toString()] = new Connection(socket, server, platform, data)
         }
     })
   }
 
   onDisconnected(connection = Connection, platform : string, thisSocketID : string) {
     let server = this;
-    let id = "User_" + connection.id;
-    let name = connection.user.name;
+    let id = connection.id;
     let user = connection.user;
     //Tell friends im disconnected
     if (user.friendList != null) {
       connection.user.friendList.forEach((friend : friendList) => {
-        let username = friend.username;
-        let userCode = friend.userCode;
+        let name = friend.name;
+        let code = friend.code;
         server.connections.forEach((friendConn : typeof Connection) => {
-          if (friendConn.user.name == username && friendConn.user.code == userCode) {
+          if (friendConn.user.name == name && friendConn.user.code == code) {
             friendConn.everySocket('TellFriendDisconnected', {
-              username: user.name,
-              userCode: user.code,
+              name: user.name,
+              code: user.code,
               clientDevice: connection.highestPlatform
             })
+            return;
           }
         })
       })
@@ -91,9 +94,16 @@ module.exports = class Server {
     } else if (platform == server.platformState.MOBILE) {
       server.connections[id].mobileSocket = null;
     }
+
+    //hangupcall on disconnect
+    let callWithUser = server.connections[id].callWithUser;
+    if(callWithUser){
+      server.connections[callWithUser].everySocket('hangupCall');
+      server.connections[id].callWithUser = undefined;
+    }
+
     server.platformState.changeHighestPlatform(connection)
-    // remove the userDisconnected from database but let friend list check for active socket when opening
-    //server.database.userDisconnected(id, platform);
+
     connection.log('Disconnected with platform: '+ platform);
   }
 
@@ -102,11 +112,10 @@ module.exports = class Server {
     server.log('Closing down lobby ( ' + index + ' )');
     delete server.lobbys[index];
   }
-  createLobby(connection : typeof Connection, socket : Socket, data : createLobby) {
+  createLobby(connection : typeof Connection, socket : Socket, name : string) {
     let server = this;
-    let name = data.name;
     if (name == null || name.trim().length == 0) {
-      connection.everySocket.emit('ShowError', {
+      socket.emit('ShowError', {
         error: "Must insert lobby name"
       });
       return;
@@ -119,33 +128,30 @@ module.exports = class Server {
       }
     });
     if (checkLobbyAlreadyExist) {
-      connection.everySocket.emit('ShowError', {
+      socket.emit('ShowError', {
         error: "Lobby with name: " + name + " already exists"
       });
       return;
     }
-    let lobby : typeof Lobby = new Lobby(name, new LobbySettings(150, 1));
+    let lobby : typeof Lobby = new Lobby(name, new LobbySettings(10, 1));
     let lobbyID : string = lobby.id;
     lobby.endLobby = function() {
       server.closeDownLobby(lobbyID)
     }
     server.lobbys[lobbyID] = lobby;
+    connection.lobby.push(lobbyID);
+    return lobby;
   }
   joinLobby(connection = Connection, lobbyID : string) {
-    let server = this;
-    //let lobbyFound = false;
-    //let gameLobbies = server.gameLobbys;
-    let lobby : typeof Lobby = server.lobbys[lobbyID];
+    let lobby : typeof Lobby = this.lobbys[lobbyID];
     if (lobby != null)
-      if (lobby.canEnterLobby(connection))
-        lobby.onSwitchLobby(connection); //do not make him swtich lobby but add lobby to his collection of lobbies on his connection
+      if (lobby.canEnterLobby(connection)){
+        lobby.onEnterLobby(connection)
+      } 
   }
 }
 
 interface friendList{
-  username : string;
-  userCode : number;
-}
-interface createLobby{
   name : string;
+  code : number;
 }
