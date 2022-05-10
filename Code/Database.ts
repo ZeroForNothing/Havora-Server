@@ -551,7 +551,7 @@ module.exports = class Database {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('color', sql.TinyInt, color)
-        .execute('SetGameThemeColor')
+        .execute('SetThemeSettings')
     }).then((result: Output)=> {
       callback(null)
     }).catch((err: any)=> {
