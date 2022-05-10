@@ -96,11 +96,11 @@ module.exports = class Server {
     }
 
     //hangupcall on disconnect
-    let callWithUser = server.connections[id].callWithUser;
-    if(callWithUser){
-      server.connections[callWithUser].everySocket('hangupCall');
-      server.connections[id].callWithUser = undefined;
+    let callWithUserID = server.connections[id].callWithUser?.id;
+    if(callWithUserID && server.connections[callWithUserID]){
+      server.connections[callWithUserID].everySocket('hangupCall');
     }
+    server.connections[id].callWithUser = undefined;
 
     server.platformState.changeHighestPlatform(connection)
 
@@ -140,17 +140,19 @@ module.exports = class Server {
     }
     server.lobbys[lobbyID] = lobby;
     connection.lobby.push(lobbyID);
+
+    connection.everySocketJoinLobby(lobby.id);
+    connection.everySocket("onEnterLobby" , {name})
+
     return lobby;
   }
   joinLobby(connection = Connection, lobbyID : string) {
     let lobby : typeof Lobby = this.lobbys[lobbyID];
-    if (lobby != null)
-      if (lobby.canEnterLobby(connection)){
+    if (lobby && lobby.canEnterLobby(connection)){
         lobby.onEnterLobby(connection)
-      } 
+    } 
   }
 }
-
 interface friendList{
   name : string;
   code : number;

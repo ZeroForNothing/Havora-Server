@@ -473,6 +473,7 @@ module.exports = class Database {
         .output('friendID', sql.BigInt)
         .output('token', sql.VarChar(250))
         .output('prof', sql.NVarChar(50))
+        .output('wall', sql.NVarChar(50))
         .execute('searchForUser')
     }).then((result: Output)=> {
       callback(result.output)

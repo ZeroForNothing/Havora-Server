@@ -39,7 +39,7 @@ module.exports = class Lobby extends LobbyBase {
       lobby.connections.push(connection);
       connection.lobby.push(lobby.name);
     }
-    connection.everySocket.join(lobby.id);
+    connection.everySocketJoinLobby(lobby.id);
     connection.everySocket("onEnterLobby" , {name : this.name})
     // do enter lobby behavior
     connection.log("Joined Lobby ("+ lobby.id+ ")")
@@ -47,7 +47,6 @@ module.exports = class Lobby extends LobbyBase {
 
   onLeaveLobby(connection = Connection) {
     let lobby = this;
-    connection.everySocket.leave(lobby.id);
     // do leave lobby behavior and remove connection from lobby
     connection.log("Left Lobby ("+ lobby.id+ ")")
   }
