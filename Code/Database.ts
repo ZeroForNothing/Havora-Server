@@ -546,12 +546,14 @@ module.exports = class Database {
       console.log("Database cought error at 36: " + err);
     })
   }
-  SetGameThemeColor(userID : string, color:number) {
+  SetThemeColor(userID : string, color:number, callback:Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('color', sql.TinyInt, color)
         .execute('SetGameThemeColor')
+    }).then((result: Output)=> {
+      callback(null)
     }).catch((err: any)=> {
       // ... error checks
       console.log("Database cought error at 37: " + err);

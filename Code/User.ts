@@ -2,6 +2,10 @@ import { Socket } from "../node_modules/socket.io/dist/index";
 
 const Connection = require('./Connection')
 const Server = require('./Server')
+type Settings = {
+  Sound_UI : number,
+  Theme_Color : number
+}
 module.exports = class User {
   name : string;
   code : number;
@@ -14,7 +18,7 @@ module.exports = class User {
   normalCoin : number;
   experience : number;
   friendList : [];
-  settings : any;
+  settings : Settings;
   constructor(data : User) {
     this.name = data.name;
     this.code = data.code;
@@ -27,7 +31,7 @@ module.exports = class User {
     this.normalCoin = data.normalCoin;
     this.experience = data.experience;
     this.friendList = [];
-    this.settings = data.settings;
+    this.settings = JSON.parse(data.settings as any)[0];
   }
   ToJson() {
     return {

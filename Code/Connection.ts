@@ -970,6 +970,15 @@ module.exports = class Connection {
       prof : string,
       wall : string
     }
+    socket.on('SetThemeColor', (data)=>{
+      server.database.SetThemeColor(userID, data.color, ()=>{
+        console.log(data.color)
+        user.settings.Theme_Color = data.color;
+        socket?.emit('registerUser', user.ToJson());
+      });
+      
+    })
+    
     socket.on('OpenWindow', (data) => {
       // if (WINDOW == data.window)
       //   return;
