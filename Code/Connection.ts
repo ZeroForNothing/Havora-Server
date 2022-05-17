@@ -29,13 +29,16 @@ interface ChatingWithUser{
 }
 interface CallWithUser{
   id : string,
-  name ?: string,
-  code ?: number,
-  token ?: string,
-  prof ?: string,
-  wall ?: string,
- connectionID : string,
-  room : "public" | "private"
+  callStarterID ?: string,
+  connectionID ?: string,
+  members ?: Members[],
+  accepted ?: boolean,
+  room : 'public' | 'private'
+}
+interface Members{
+  id : string,
+  flag : boolean,
+  finished : boolean
 }
 
 module.exports = class Connection {
@@ -48,8 +51,7 @@ module.exports = class Connection {
   mobileSocket ?: Socket;
   lobby : typeof Lobby[];
   server : typeof Server;
-  callWithUser ?: CallWithUser;
-  signal : any;
+  callInfo ?: CallWithUser;
 
   constructor(socket : Socket, server : typeof Server, currentPlatform : string, userData : typeof User) {
     this.id = userData.id;
@@ -165,7 +167,46 @@ module.exports = class Connection {
       connection.log('Left the lobby ('+ lobbyID+ ') with mobile');
     }
   }
-
+  hangupCall(){
+    let connection : Connection = this;
+    let server = connection.server;
+    if (connection.callInfo != undefined) {
+      if(connection.callInfo.room == "private"){
+        // remove from connection and client ui
+        if(!connection.callInfo.accepted){
+          server.connections[connection.callInfo.id].callInfo = undefined;
+          server.connections[connection.callInfo.id].everySocket('hangupCall')
+        }
+        else server.connections[connection.callInfo.id].everySocket('hangupCall', { name : connection.user.name , code : connection.user.code })
+        
+        connection.callInfo = undefined;
+        connection.everySocket('hangupCall')
+        connection.everySocket("SetCallFromRightPanel" , { callerChatOpened  : false })
+        connection.everySocket("SetCallFromChat" , { inCall  : false })
+      }else if(connection.callInfo.room == "public"){
+        // remove from lobby members and connection and client ui
+        let lobby = server.lobbys[connection.callInfo.id];
+        let index : number = -1;
+        connection.callInfo = undefined;
+        connection.everySocket('hangupCall')
+        lobby.callInfo.members.forEach((member : Members , ind : number) => {
+          if(member.id == connection.id){
+            index = ind;
+          }
+        });
+        lobby.connections.forEach((conn : Connection) => {
+          if(conn.id != connection.id){
+            lobby.callInfo.members.forEach((member : Members , ind : number) => {
+              if(conn.id == member.id){
+                conn.everySocket('hangupCall', { name : connection.user.name , code : connection.user.code } )
+              }
+            });
+          } 
+        });
+        if(index > -1) lobby.callInfo.members.splice(index , 1);
+      }
+    } 
+  }
   createSocialEvents(currentPlatform : string) {
     let windowState = new WindowState();
     let WINDOW : string = windowState.defaultState;
@@ -179,7 +220,7 @@ module.exports = class Connection {
 
     let connection : Connection = this;
     let userID = connection.id;
-    let server = connection.server;
+    let server : typeof Server = connection.server;
     let user = connection.user;
     let socket : Socket | undefined = undefined;
     
@@ -191,7 +232,7 @@ module.exports = class Connection {
     } else if (currentPlatform == platformState.MOBILE) {
       socket = connection.mobileSocket as Socket;
     }
-    connection.log('Connected with platform: ' + currentPlatform);
+    // connection.log('Connected with platform: ' + currentPlatform);
 
     connection.lobby.forEach(lobby => {
       Object.keys(server.lobbys).forEach(lobbyIndex => {
@@ -205,8 +246,7 @@ module.exports = class Connection {
     if(!socket)return;
     
     socket.emit('registerUser', user.ToJson());
-    // socket.on('registerUser',()=>{
-    // })
+
     interface friendListJson{
       friendListJson : string;
     }
@@ -218,10 +258,10 @@ module.exports = class Connection {
       token : string
     }
     socket.on('tellFriendsImOnline', function () {
-      connection.log("Fetching friends list")
+      // connection.log("Fetching friends list")
       server.database.getFriendsList(userID, (dataD : friendListJson) => {
         user.friendList = dataD.friendListJson ? JSON.parse(dataD.friendListJson) : null
-        if(socket) socket.emit('updateFriendList', dataD);
+        socket?.emit('updateFriendList', dataD);
         if (user.friendList.length == 0) return;
         user.friendList.forEach((friend : friendList) => {
           let name = friend.name;
@@ -254,7 +294,7 @@ module.exports = class Connection {
     }
     socket.on('getNotification', function () {
       server.database.getFriendRequest(userID, (dataD : friendRequests) => {
-        if(socket) socket.emit('getFriendRequest', {
+        socket?.emit('getFriendRequest', {
           friendRequests: dataD.friendRequests
         });
       })
@@ -353,10 +393,10 @@ module.exports = class Connection {
     })
     socket.on('msgsRecievedWhileNotTaklingWithUser',(data)=>{
       if(!data.showUnreadMsgs && ChatingWithUser && ChatingWithUser.name == data.name && ChatingWithUser.code == data.code){
-        if(socket) socket.emit('msgsRecievedWhileNotTaklingWithUser')
+        socket?.emit('msgsRecievedWhileNotTaklingWithUser')
       }else{
         data.showUnreadMsgs = true;
-        if(socket) socket.emit('msgsRecievedWhileNotTaklingWithUser' , data)
+        socket?.emit('msgsRecievedWhileNotTaklingWithUser' , data)
       }
     })
     interface showChatHistory{
@@ -369,7 +409,7 @@ module.exports = class Connection {
       connection.log("Fetching chat history for user "+ ChatingWithUser.id)
       server.database.showChatHistory(userID, ChatingWithUser.id, data.page, (dataD : showChatHistory) => {
 
-        if(socket) socket.emit('showChatHistory', {
+        socket?.emit('showChatHistory', {
           refresh : data.refresh,
           chatLog: dataD.chatLog,
           name: user.name,
@@ -461,7 +501,7 @@ module.exports = class Connection {
         if (dataD.friendID != null) {
           user.GetAccountLink(connection, server, socket);
         } else {
-          if(socket) socket.emit('setAccountLinks');
+          socket?.emit('setAccountLinks');
         }
       })
     })
@@ -470,7 +510,7 @@ module.exports = class Connection {
     }
     socket.on('accessAccountLinks', function (data) {
       server.database.accessAccountLinks(userID, data.name, data.code, currentPlatform, (dataD : accessAccountLinks) => {
-        if(socket) socket.emit('accessAccountLinks', dataD.AuthToken);
+        socket?.emit('accessAccountLinks', dataD.AuthToken);
       })
     })
 
@@ -484,10 +524,10 @@ module.exports = class Connection {
     socket.on('getTopPosts', function (data) {
       connection.log(`Fetching posts for ${data.categoryID != 1 ? "Community" : "Profile "+data.name+"#"+data.code}`)
       server.database.getTopPosts(connection.id,data.categoryID, data.name, data.code, data.page, (dataD : getTopPosts) => {
-        if(socket) socket.emit('getCategoryName',{
+        socket?.emit('getCategoryName',{
           categoryName : dataD.categoryName
         })
-        if(socket) socket.emit('getTopPosts', {
+        socket?.emit('getTopPosts', {
           currentCategoryID : data.categoryID,
           postsList: dataD.postsList,
           page: data.page + 5
@@ -502,7 +542,7 @@ module.exports = class Connection {
       let categoryName = data.categoryName;
       if(categoryName.trim().length === 0) return;
       server.database.getCategoryList(categoryName,(dataD : getCategoryList) => {
-        if(socket) socket.emit('getCategoryList', {
+        socket?.emit('getCategoryList', {
           categoryList: dataD.categoryList,
           categorySuggestionList : dataD.categorySuggestionList
         });
@@ -527,7 +567,7 @@ module.exports = class Connection {
       }
       connection.log(`Fetching comments for ${postID ? "Post" : "Comment"} with id: ${postID ? postID : commentID}`)
       server.database.getTopComments(connection.id,postID, commentID, data.page, (dataD : getTopComments) => {
-        if(socket) socket.emit('getTopComments', {
+        socket?.emit('getTopComments', {
           commentsList: dataD.commentsList,
           postID: postID,
           commentID: commentID,
@@ -542,7 +582,7 @@ module.exports = class Connection {
     }
     socket.on('setUserOpinion', function (data) {
       server.database.setUserOpinion(userID, data.postID, data.commentID, data.opinion, (dataD : setUserOpinion) => {
-        if(socket) socket.emit('setUserOpinion', {
+        socket?.emit('setUserOpinion', {
           error: dataD.error,
           agree: dataD.agree,
           disagree: dataD.disagree,
@@ -569,7 +609,7 @@ module.exports = class Connection {
       connection.log(`Editing Content with id ${data.postID ? data.postID : data.commentID}`)
       server.database.saveContent(userID, data.postID, data.commentID, data.text, (dataD : saveContent) => {
         //make it show also on all users when edit happens
-        if(socket) socket.emit('saveContent', {
+        socket?.emit('saveContent', {
           answer: dataD.answer,
           postID: data.postID,
           commentID: data.commentID,
@@ -595,7 +635,7 @@ module.exports = class Connection {
       }
       CreatingPostFor = null;
 
-      if(socket) socket.emit('OpenWindow', {
+      socket?.emit('OpenWindow', {
         window: WINDOW
       });
     })
@@ -631,7 +671,7 @@ module.exports = class Connection {
           });
           if(!result) return;
           connection.log(`Updated ${data.prof} with ${data.fileName}`)
-          if(socket) socket.emit('updateUserPicture',{ prof : data.prof , fileName : data.fileName })
+          socket?.emit('updateUserPicture',{ prof : data.prof , fileName : data.fileName })
         })
     })
     socket.on('startCreatingPost', async function (data : CreatingPostFor) {
@@ -653,13 +693,13 @@ module.exports = class Connection {
         WINDOW = windowState.POST;
         if (data.type == 1) {
           CreatingPostFor = { type : 1, id : userID, token : null, prof : null, name : null, code: null , folderName };
-          if(socket) socket.emit('OpenWindow', {
+          socket?.emit('OpenWindow', {
             window: WINDOW,
             load : folderName
           });
         } else if (data.type == 2) {
           CreatingPostFor = { type : 2, id : null, token : null, prof : null, name : null, code : null , folderName };
-          if(socket) socket.emit('OpenWindow', {
+          socket?.emit('OpenWindow', {
             window: WINDOW,
             load : folderName
           });
@@ -667,24 +707,24 @@ module.exports = class Connection {
           server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
             if (dataD.friendID != null) {
               CreatingPostFor = { type : 3, id :  dataD.friendID, token : dataD.token, prof : dataD.prof, name : data.name, code : data.code  , folderName};
-              if(socket) socket.emit('OpenWindow', {
+              socket?.emit('OpenWindow', {
                 window: WINDOW,
                 load : folderName
               });
             } else {
-              if(socket) socket.emit('ShowError', {
+              socket?.emit('ShowError', {
                 error: "User " + data.name + "#" + data.code + " either not in your friendlist or doesn't exist"
               });
             }
           })
         }
         else {
-          if(socket) socket.emit('ShowError', {
+          socket?.emit('ShowError', {
             error: "Error selecting post type"
           });
         }
       } else {
-        if(socket) socket.emit('ShowError', {
+        socket?.emit('ShowError', {
           error: "Must select post type"
         });
       }
@@ -709,7 +749,7 @@ module.exports = class Connection {
       if (data.url != null) errorText = "Youtube url entered is not valid"; else postUrl = null
 
       if(errorText.trim().length != 0){
-        if(socket) socket.emit('ShowError', {
+        socket?.emit('ShowError', {
           error: `Create Post: ${errorText}`
         });
         return;
@@ -755,13 +795,13 @@ module.exports = class Connection {
           else if (CreatingPostFor && CreatingPostFor.id == null) WINDOW = windowState.COMMUNITY
           else WINDOW = windowState.PROFILE
 
-          if(socket) socket.emit('OpenWindow', {
+          socket?.emit('OpenWindow', {
             window: WINDOW
           });
           connection.log("Finished creating Post in success")
         }
         else{
-          if(socket) socket.emit('ShowError', {
+          socket?.emit('ShowError', {
             error: dataD.error
           });
         }
@@ -778,11 +818,11 @@ module.exports = class Connection {
       let commentID = ViewingCommentID;
       server.database.createComment(userID, postID, commentID, data.text, (dataD : createComment) => {
         if (dataD.error){
-          if(socket) socket.emit('ShowError', {
+          socket?.emit('ShowError', {
             error: "Error creating comment with code " + dataD.error
           })
         } else {
-          if(socket) socket.emit('createComment', {
+          socket?.emit('createComment', {
             id: dataD.returnCommentID,
             text: data.text,
             date : dataD.commentDate,
@@ -814,7 +854,7 @@ module.exports = class Connection {
           if (ChatingWithUser && friendID == ChatingWithUser.id) {
             ChatingWithUser = null;
             WINDOW = windowState.HOME;
-            if(socket) socket.emit('OpenWindow', { window: WINDOW });
+            socket?.emit('OpenWindow', { window: WINDOW });
           }
           
           user.friendList.forEach((friend : friendList, i : number) => {
@@ -852,7 +892,7 @@ module.exports = class Connection {
           }
         }else if (dataD.requestHandler == 2) {
           //accepted friend request
-          if(socket) socket.emit('manageFriendRequest', returnData);
+          socket?.emit('manageFriendRequest', returnData);
           // if (dataD.error != null) return;
           // if (respond && dataD.friendJson[0] != null && dataD.myJson[0] != null) {
           //   let friendData = {
@@ -887,7 +927,7 @@ module.exports = class Connection {
     }
     socket.on('getUserInformation', function () {
       server.database.getUserInformation(userID, (dataD : getUserInformation) => {
-        if(socket) socket.emit('getUserInformation', {
+        socket?.emit('getUserInformation', {
           firstname: dataD.firstname,
           lastname: dataD.lastname,
           name: dataD.name,
@@ -903,7 +943,7 @@ module.exports = class Connection {
     }
     socket.on('editProfileInfo', function (data) {
       server.database.editProfileInfo(userID, data.firstName, data.lastName, data.gender, data.date, (dataD : editProfileInfo) => {
-        if(socket) socket.emit('editProfileInfo', {
+        socket?.emit('editProfileInfo', {
           error: dataD.error
         });
       })
@@ -911,7 +951,7 @@ module.exports = class Connection {
     socket.on('searchForUser', function (data) {
       if (data.name == null || data.code == null || isNaN(data.code)) return;
       server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
-        if(socket) socket.emit('searchForUser', {
+        socket?.emit('searchForUser', {
           token: dataD.token,
           prof: dataD.prof,
           name: data.name,
@@ -943,7 +983,7 @@ module.exports = class Connection {
             name : name,
             code : code,
           };
-          if(socket) socket.emit('setProfileData', {
+          socket?.emit('setProfileData', {
             friendRequest: dataD.friendRequest,
             token: dataD.token,
             prof: dataD.prof,
@@ -960,7 +1000,7 @@ module.exports = class Connection {
     }
     socket.on('editPassword', function (data) {
       server.database.editPassword(userID, data.oldPassword, data.confPassword, data.newPassword, (dataD : editPassword) => {
-        if(socket) socket.emit('editPassword', dataD.error);
+        socket?.emit('editPassword', dataD.error);
       })
     })
 
@@ -972,7 +1012,6 @@ module.exports = class Connection {
     }
     socket.on('SetThemeColor', (data)=>{
       server.database.SetThemeColor(userID, data.color, ()=>{
-        console.log(data.color)
         user.settings.Theme_Color = data.color;
         socket?.emit('registerUser', user.ToJson());
       });
@@ -984,7 +1023,7 @@ module.exports = class Connection {
       //   return;
       if(!windowState.isWindow(data.window)) return;
       if (WINDOW === windowState.POST && data.window !== windowState.POST) {
-        if(socket) socket.emit('promptToDiscardPost');
+        socket?.emit('promptToDiscardPost');
         return;
       }
       if(data.window === windowState.CHAT){
@@ -1002,17 +1041,18 @@ module.exports = class Connection {
             code: data.code,
             token: dataD.token,
             pic: dataD.prof,
-            inCall : connection.callWithUser?.id == dataD.friendID
+            inCall : connection.callInfo?.id == dataD.friendID
           }   
-          if(socket) socket.emit("refreshChat")
+          socket?.emit("refreshChat")
           WINDOW = data.window;
-          if(socket) socket.emit("SetCallFromRightPanel" , { callerChatOpened  : ChatingWithUser && connection.callWithUser?.id == ChatingWithUser.id })
-          if(socket) socket.emit('OpenWindow', { window : WINDOW , load });
+          let inCall = ChatingWithUser && connection.callInfo?.id == ChatingWithUser.id
+          socket?.emit("SetCallFromRightPanel" , { callerChatOpened  : inCall })
+          socket?.emit('OpenWindow', { window : WINDOW , load });
         })
         return;
       }else{
         ChatingWithUser = null;
-        if(socket) socket.emit("SetCallFromRightPanel" , { callerChatOpened  : false})
+        socket?.emit("SetCallFromRightPanel" , { callerChatOpened  : false})
       }
       //if (data.window === windowState.STORE) {
         // server.database.getSkins(null, 0, 0, (dataD) => {
@@ -1025,131 +1065,195 @@ module.exports = class Connection {
       //   user.GetAccountLink(connection, server, socket);
       // } 
       WINDOW = data.window;
-      if(socket) socket.emit('OpenWindow', data);
+      socket?.emit('OpenWindow', data);
       connection.log("Showing " + WINDOW + " Tab")
     })
-
-    socket.on('callUser', function (data) {
-      user.friendList.forEach((friend : friendList) => {
-        let name = friend.name;
-        let code = friend.code;
-        if(data.name != name && data.code != code) return;
-        for (let key in server.connections) {
-          if (server.connections.hasOwnProperty(key)) {
-            if (server.connections[key].user.name == name && server.connections[key].user.code == code) {
-              if(server.connections[key].callWithUser && server.connections[key].callWithUser.room == "private" && server.connections[key].callWithUser.id != connection.id){
-                // User already in-call before this
-                socket?.emit('alreadyInCall')
+    socket.on('validateCall',(data)=>{
+      for (let key in server.connections) {
+        if (server.connections.hasOwnProperty(key)) {
+          if (server.connections[key].user.name == data.name && server.connections[key].user.code == data.code) {
+            if(connection.callInfo){
+              if(connection.callInfo.id !== key || server.connections[key].callInfo){
+                socket?.emit('ShowError', {
+                  error: `Must hangup to call ${data.name}#${data.code}`
+                });
                 return;
               }
+            }
+            connection.log(`Call valid`)
+            socket?.emit("validateCall")
+            return;
+          }
+        }
+      }
+    })
+    socket.on('callUser', function (data) {
+        for (let key in server.connections) {
+          if (server.connections.hasOwnProperty(key)) {
+            if (server.connections[key].user.name == data.name && server.connections[key].user.code == data.code) {
               // Start the call
-              if(!connection.callWithUser || connection.callWithUser.room == "private"){
-                connection.callWithUser = { id : key , room : "private" , name, code , token : friend.token, prof : friend.prof , wall : friend.wall , connectionID : data.connectionID};
-                server.connections[key].callWithUser  = { id : connection.id , room : "private" , name : user.name , code : user.code, token : user.token, prof : user.prof , wall : user.wall, connectionID : data.connectionID};
+              let reJoin : boolean = server.connections[key].callInfo && server.connections[key].callInfo.id == connection.id;
+              if(data.private){
+                connection.callInfo = { id : key , connectionID : data.connectionID , room : 'private' , accepted : false};
+                server.connections[key].callInfo  = { id : connection.id , connectionID : data.connectionID, room : 'private', accepted : false};
               }
-              connection.signal = data.signal;
-              connection.log("signal has been changed")
               let returnData = {
                 name : user.name,
                 code : user.code,
                 token : user.token,
                 prof : user.prof,
                 wall : user.wall,
-                signalList : [data.signal],
+                signal : data.signal,
                 connectionID : data.connectionID,
-                socketID : socket ? socket.id : null
+                socketID : socket ? socket.id : null,
+                silentCall : data.silentCall,
+                newMember : data.newMember,
+                reJoin
               }
+              
+              connection.log(`${connection.callInfo && connection.callInfo.room == "private" ? "User" : "Group"} call: ${key}`)
+              server.connections[key].everySocket("SetCallTitle" , { name: user.name, code:user.code , group : connection.callInfo?.room == "public" ? server.lobbys[connection.callInfo.id].name : null})
               server.connections[key].everySocket('callUser', returnData)
               return;
             }
           }
         }
-      })
     });
     socket.on('answerCall',(data)=>{
-      if(data && data.socketID && connection.callWithUser) {
-        connection.signal = data.signal;
-        connection.log("signal has been changed")
+      if(data && data.socketID && connection.callInfo) {
+        if(connection.lobby.length != 0 && connection.callInfo.room == "public"){
+          let lobby : typeof Lobby = server.lobbys[connection.callInfo.id];
+          let lobbyCallInfo = lobby.callInfo;
+          let flagAmount : number = 0; // since the caller is a flag and the first person he called is the other flag
+          let finished : boolean = false; 
+          let callStarterID = lobbyCallInfo.callStarterID;
+          lobbyCallInfo.members.forEach((member : Members)=>{
+            if(member.id == connection.id){
+              member.flag = true;
+              finished = member.finished;
+            }
+            if(member.flag) flagAmount++;
+          })
+          if(!finished && flagAmount > 2){
+            let peopleToCall : any[] = [];
+            lobbyCallInfo.members.forEach((member : Members) => {
+              if(callStarterID === member.id || connection.id === member.id) return;
+              if(member.flag){
+                // start connecting to people silently
+                const conn = server.connections[member.id];
+                peopleToCall.push({ name : conn.user.name , code : conn.user.code , prof : conn.user.prof, wall : conn.user.wall , token : conn.user.token });
+                member.finished = true;
+              }
+            })
+            socket?.emit('silentCall', { members : peopleToCall })
+          }
+        }else if(connection.callInfo.room == "private"){
+          connection.callInfo.accepted = true;
+          server.connections[connection.callInfo.id].callInfo.accepted = true;          
+        }
         let returnData = {
           name : user.name,
           code : user.code,
           token : user.token,
           prof : user.prof,
           wall : user.wall,
-          signalList : [data.signal],
+          signal : data.signal,
           connectionID : data.connectionID,
+          silentCall : data.silentCall,
+          newMember : data.newMember
         }
+        connection.log(`${connection.callInfo.room == "private" ? "User" : "Group"} answer: ${connection.callInfo.id}`)
         server.io.to(data.socketID).emit('callAccepted', returnData)
       } 
     })
     socket.on('hangupCall',()=>{
-      if (connection.callWithUser != undefined) {
-        // server.connections[connection.callWithUser.id].callWithUser = undefined;
-        // server.connections[connection.callWithUser.id].everySocket('hangupCall')
-        // if(socket) socket.emit("SetCallFromRightPanel" , { callerChatOpened  : ChatingWithUser && connection.callWithUser?.id === ChatingWithUser.id })
-        // connection.callWithUser = undefined;
-      } 
+      connection.hangupCall();
     })
     socket.on('callRinging',()=>{
-      if(connection.callWithUser){
+      if(connection.callInfo){
         // server.connections[connection.callWithUser.id].everySocket('callRinging') //remove everysocket
       }
     })
     socket.on('updateVoiceActivity',(data)=>{
-      if(data && data.volume && data.id && connection.callWithUser){
+      if(data && data.volume && data.id && connection.callInfo){
         // server.connections[connection.callWithUser.id].everySocket('updateVoiceActivity', data)  //remove everysocket
       }
     })
     socket.on('inviteToLobby', async (data)=>{
-      if(data && connection.callWithUser){
-        if(connection.callWithUser.room === "private"){
-          //taking private then inviting people in, we create a new lobby and invite every in it;
-          
-          await server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
-            if(!dataD.friendID || !connection.callWithUser || !server.connections[dataD.friendID]) return;
-            
-            const talkingPrivateWithUser = connection.callWithUser;
-            const lobbyName = nanoid();
-
-            const lobby = server.createLobby(connection, socket, lobbyName);
-            connection.callWithUser = { id : lobby.id, room : "public" , connectionID : talkingPrivateWithUser.connectionID};           
-
-            server.joinLobby(server.connections[talkingPrivateWithUser.id], lobby.id)
-            server.connections[talkingPrivateWithUser.id].callWithUser = connection.callWithUser;
-
-            let memberAdded = {
-              name : data.name,
-              code : data.code,
-              token : dataD.token,
-              prof : dataD.prof,
-              wall :  dataD.wall
-            };
-            // const signalList = [server.connections[talkingPrivateWithUser.id].signal , connection.signal]
-            
-            server.joinLobby(server.connections[dataD.friendID], lobby.id);
-            server.connections[dataD.friendID].callWithUser = connection.callWithUser;
-            
-            server.io.to(lobby.id).emit("startGroupCall" , { memberAdded , connectionID : talkingPrivateWithUser.connectionID })
-            // lobby.startGroupCall(connection);
-
-            // let returnData = {
-            //   name : lobbyName,
-            //   code : 0,
-            //   token : '',
-            //   prof : null,
-            //   wall : null,
-            //   signalList,
-            //   connectionID : data.connectionID,
-            //   socketID : socket ? socket.id : null
-            // }
-            // server.connections[dataD.friendID].everySocket('callUser', returnData)
-          })
-        }else{
-
-          // server.joinLobby("lobbyName6"); 
+      if(!data || !data.name || !data.code) return;
+      connection.log(`Inviting ${data.name}#${data.code}`)
+        //taking private then inviting people in, we create a new lobby and with all the people invited including the guys in the previous voice call
+      await server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
+        if(!dataD.friendID || !server.connections[dataD.friendID]) {
+          connection.log("user is not on server connection yet")
+          return;
         }
-        // socket?.emit('addPersonToCall', data)
-      }
+        
+        const lobby : typeof Lobby = connection.callInfo && connection.callInfo.room == "public" ? server.lobbys[connection.callInfo.id] : server.createLobby();
+        //set callerid to the inviter since the group got created now
+        if(connection.callInfo && connection.callInfo.room == "private") lobby.callInfo.callStarterID = connection.id;
+        
+        
+        // return if user invited is already in lobby
+        let alreadyInLobby = false;
+        let invitedID = server.connections[dataD.friendID].id;
+        lobby.connections.forEach((conn : Members) => {
+          if(invitedID === conn.id) {
+            alreadyInLobby = true;
+            return;
+          }
+        })
+        if(alreadyInLobby){
+          socket?.emit('ShowError', {
+            error: "User " + data.name + "#" + data.code + " already in lobby"
+          });
+          return; 
+        }
+        
+        let membersToCall : any[] = [];
+        let skipInvite : boolean = false;
+        // since we are inviting people while incall inside the group
+        // make sure we leave any private call
+        if(connection.callInfo && connection.callInfo.room == "private"){
+          // if invited person is the same one who is in private call with
+          skipInvite = connection.callInfo.id == dataD.friendID;
+
+          let conn = server.connections[connection.callInfo.id];
+          // lobby creator
+          server.joinLobby(connection, lobby.id)
+          connection.callInfo = { id : lobby.id , callStarterID : lobby.callInfo.callStarterID, room : 'public'};
+          lobby.callInfo.members.push({ id : connection.id, flag : true , finished : true });
+          // who was in private call with the creator
+          server.joinLobby(conn, lobby.id)
+          membersToCall.push({
+            name : conn.user.name,
+            code : conn.user.code,
+            token : conn.user.token,
+            prof : conn.user.prof,
+            wall :  conn.user.wall,
+            doNotCall : true
+          })
+          conn.everySocket("SetCallTitle" , {group : lobby.name})
+          lobby.callInfo.members.push({ id : conn.id, flag : true , finished : true });
+          conn.callInfo = { id : lobby.id , callStarterID : lobby.callInfo.callStarterID, room : 'public'};
+        } 
+        if(connection.callInfo && connection.callInfo.room == "public" && !skipInvite){
+          let conn = server.connections[dataD.friendID];
+          server.joinLobby(conn, lobby.id);
+          membersToCall.push({
+            name : conn.user.name,
+            code : conn.user.code,
+            token : conn.user.token,
+            prof : conn.user.prof,
+            wall :  conn.user.wall
+          });
+          lobby.callInfo.members.push({ id : conn.id, flag : false , finished : false });
+          conn.callInfo = { id : lobby.id , callStarterID : lobby.callInfo.callStarterID, room : 'public'};
+        }
+        connection.log(`${data.name}#${data.code} is a member now`)
+        connection.log("Start group call")
+        socket?.emit("startGroupCall" , { members : membersToCall , group : lobby.name })
+      })
     })
   }
 }

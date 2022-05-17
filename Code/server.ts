@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid"
 import { Socket } from "socket.io"
 
 const Connection = require('./Connection')
@@ -44,7 +45,7 @@ module.exports = class Server {
       server.log("Platform is invalid");
       return;
     }
-    server.log("Fetching user data on " + email+" with platform " + platform);
+    // server.log("Fetching user data on " + email+" with platform " + platform);
     server.database.getDataForSocket(email, (data : typeof User) => {
         if (data.id == null) {
           server.log(`User with ${email} is invalid`);
@@ -65,6 +66,10 @@ module.exports = class Server {
     let server = this;
     let id = connection.id;
     let user = connection.user;
+
+    //hangupcall on disconnect
+    connection.hangupCall();
+
     //Tell friends im disconnected
     if (user.friendList != null) {
       connection.user.friendList.forEach((friend : friendList) => {
@@ -82,6 +87,7 @@ module.exports = class Server {
         })
       })
     }
+
     if (platform == server.platformState.CLIENT) {
       server.connections[id].clientSocket = null;
     } else if (platform == server.platformState.WEBSITE) {
@@ -95,13 +101,6 @@ module.exports = class Server {
       server.connections[id].mobileSocket = null;
     }
 
-    //hangupcall on disconnect
-    let callWithUserID = server.connections[id].callWithUser?.id;
-    if(callWithUserID && server.connections[callWithUserID]){
-      server.connections[callWithUserID].everySocket('hangupCall');
-    }
-    server.connections[id].callWithUser = undefined;
-
     server.platformState.changeHighestPlatform(connection)
 
     connection.log('Disconnected with platform: '+ platform);
@@ -112,12 +111,10 @@ module.exports = class Server {
     server.log('Closing down lobby ( ' + index + ' )');
     delete server.lobbys[index];
   }
-  createLobby(connection : typeof Connection, socket : Socket, name : string) {
+  createLobby(name : string = nanoid()) {
     let server = this;
     if (name == null || name.trim().length == 0) {
-      socket.emit('ShowError', {
-        error: "Must insert lobby name"
-      });
+      server.log("Must insert lobby name");
       return;
     }
     let checkLobbyAlreadyExist = false;
@@ -128,21 +125,16 @@ module.exports = class Server {
       }
     });
     if (checkLobbyAlreadyExist) {
-      socket.emit('ShowError', {
-        error: "Lobby with name: " + name + " already exists"
-      });
+      server.log("Lobby with name: " + name + " already exists")
       return;
     }
     let lobby : typeof Lobby = new Lobby(name, new LobbySettings(10, 1));
+
     let lobbyID : string = lobby.id;
     lobby.endLobby = function() {
       server.closeDownLobby(lobbyID)
     }
     server.lobbys[lobbyID] = lobby;
-    connection.lobby.push(lobbyID);
-
-    connection.everySocketJoinLobby(lobby.id);
-    connection.everySocket("onEnterLobby" , {name})
 
     return lobby;
   }

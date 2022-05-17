@@ -10,6 +10,7 @@ module.exports = class Lobby extends LobbyBase {
     this.name = name;
     this.settings = settings;
     this.endLobby = function() {};
+    this.callInfo = { members : new Array(), callStarterID : undefined };
   }
 
   canEnterLobby() {

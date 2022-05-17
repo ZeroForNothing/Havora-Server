@@ -163,7 +163,7 @@ interface socketLogin{
     email : string;
 }
 io.on('connection', function (socket : Socket) {
-  serverLog("Connection Started ( Socket id: " + socket.id + " )")
+  // serverLog("Connection Started ( Socket id: " + socket.id + " )")
   socket.on('socketLogin', function (data : socketLogin) {
     if (data.platform != null && data.email != null)
       nodeServer.onConnected(socket, data.platform, data.email);
