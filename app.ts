@@ -31,8 +31,9 @@ const io = require("socket.io")(serverManager,
   serverManager.listen(process.env.PORT, () => serverLog(`Listening on port ${process.env.PORT}`));
   
   let WebServer = require('./Code/server')
+
   let nodeServer = new WebServer(io);
-  
+
   const PlatformState = require('./Code/Utility/PlatformState')
   let platformState = new PlatformState();
 

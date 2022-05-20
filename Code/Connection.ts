@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { Socket } from "../node_modules/socket.io/dist/socket";
+import { Socket } from "socket.io";
 let axios = require('axios')
 let User = require('./User')
 const WindowState = require('./Utility/WindowState')
@@ -72,11 +72,22 @@ module.exports = class Connection {
     this.server = server;
     this.user = new User(userData);
 
+    this.server.database.getMyGroups(this.id,async (dataD : any) => {
+      console.log(dataD)
+      if(dataD.allGroups){
+        const myGroups = dataD.myGroups.split(',');
+        myGroups.forEach(async (lobbyID : string )=> {
+          if(this.server.lobbys[lobbyID]){
+            await this.server.lobbys[lobbyID].onEnterLobby(this)
+          }
+        });
+      }
+    })
 
     // let groupLobbyID = "GroupLobby";
     // if (groupLobbyID != null && groupLobbys[groupLobbyID] != null) {
     //   let groupLobbys = server.groupLobbys;
-    //   socket.join(groupLobbyID);
+    //   socket?.join(groupLobbyID);
     //   connection.groupLobby = groupLobbys[groupLobbyID];
     //   connection.groupLobby.onEnterGroupLobby(connection);
     // }
@@ -148,25 +159,25 @@ module.exports = class Connection {
       connection.log('Entered the lobby ('+ lobbyID+ ') with mobile');
     }
   }
-  everySocketLeaveLobby(lobbyID : string) {
-    let connection = this;
-    if (connection.clientSocket != null){
-      connection.clientSocket.leave(lobbyID);
-      connection.log('Left the lobby ('+ lobbyID+ ') with client');
-    }
-    if (connection.webSocket.length != 0) {
-      connection.webSocket.forEach((mySocket : Socket) => {
-        if (mySocket != null) {
-          mySocket.leave(lobbyID);
-          connection.log('Left the lobby ('+ lobbyID+') with web');
-        }
-      })
-    }
-    if (connection.mobileSocket != null){
-      connection.mobileSocket.leave(lobbyID);
-      connection.log('Left the lobby ('+ lobbyID+ ') with mobile');
-    }
-  }
+  // everySocketLeaveLobby(lobbyID : string) {
+  //   let connection = this;
+  //   if (connection.clientSocket != null){
+  //     connection.clientSocket.leave(lobbyID);
+  //     connection.log('Left the lobby ('+ lobbyID+ ') with client');
+  //   }
+  //   if (connection.webSocket.length != 0) {
+  //     connection.webSocket.forEach((mySocket : Socket) => {
+  //       if (mySocket != null) {
+  //         mySocket.leave(lobbyID);
+  //         connection.log('Left the lobby ('+ lobbyID+') with web');
+  //       }
+  //     })
+  //   }
+  //   if (connection.mobileSocket != null){
+  //     connection.mobileSocket.leave(lobbyID);
+  //     connection.log('Left the lobby ('+ lobbyID+ ') with mobile');
+  //   }
+  // }
   hangupCall(){
     let connection : Connection = this;
     let server = connection.server;
@@ -234,18 +245,17 @@ module.exports = class Connection {
     }
     // connection.log('Connected with platform: ' + currentPlatform);
 
-    connection.lobby.forEach(lobby => {
+    connection.lobby.forEach(lobbyName => {
       Object.keys(server.lobbys).forEach(lobbyIndex => {
-        if (server.lobbys[lobbyIndex].name === lobby) {
-          server.lobbys[lobbyIndex].onEnterLobby(connection);
+        if (server.lobbys[lobbyIndex].name === lobbyName) {
+          let lobby = server.lobbys[lobbyIndex];
+          socket?.join(lobby.id);
           return;
         }
       });
     });
-
-    if(!socket)return;
     
-    socket.emit('registerUser', user.ToJson());
+    socket?.emit('registerUser', user.ToJson());
 
     interface friendListJson{
       friendListJson : string;
@@ -257,10 +267,11 @@ module.exports = class Connection {
       wall : string,
       token : string
     }
-    socket.on('tellFriendsImOnline', function () {
+    socket?.on('tellFriendsImOnline', function () {
       // connection.log("Fetching friends list")
+      socket?.emit('updateGroupList',{ lobbies : connection.lobby })
       server.database.getFriendsList(userID, (dataD : friendListJson) => {
-        user.friendList = dataD.friendListJson ? JSON.parse(dataD.friendListJson) : null
+        user.friendList = dataD.friendListJson ? JSON.parse(dataD.friendListJson) : null;
         socket?.emit('updateFriendList', dataD);
         if (user.friendList.length == 0) return;
         user.friendList.forEach((friend : friendList) => {
@@ -292,22 +303,22 @@ module.exports = class Connection {
     interface friendRequests {
       friendRequests: string
     }
-    socket.on('getNotification', function () {
+    socket?.on('getNotification', function () {
       server.database.getFriendRequest(userID, (dataD : friendRequests) => {
         socket?.emit('getFriendRequest', {
           friendRequests: dataD.friendRequests
         });
       })
     });
-    socket.on('disconnect', function () {
-      server.onDisconnected(connection, currentPlatform, socket ?  socket.id : null);
+    socket?.on('disconnect', function () {
+      server.onDisconnected(connection, currentPlatform, socket ?  socket?.id : null);
     });
   
     interface saveMsg{
       textID : string,
       unSeenMsgsCount : number
     }
-    socket.on('sendMessage', async function (data) {
+    socket?.on('sendMessage', async function (data : any) {
       if (!ChatingWithUser || !ChatingWithUser.id) return;
       if(!data && !data.message && !data.folderName) return;
       let folderName = data.folderName;
@@ -391,7 +402,7 @@ module.exports = class Connection {
         }
       })
     })
-    socket.on('msgsRecievedWhileNotTaklingWithUser',(data)=>{
+    socket?.on('msgsRecievedWhileNotTaklingWithUser',(data : any)=>{
       if(!data.showUnreadMsgs && ChatingWithUser && ChatingWithUser.name == data.name && ChatingWithUser.code == data.code){
         socket?.emit('msgsRecievedWhileNotTaklingWithUser')
       }else{
@@ -403,7 +414,7 @@ module.exports = class Connection {
       chatLog : string,
       unSeenMsgsCount : number
     }
-    socket.on('showChatHistory', (data : any) => {
+    socket?.on('showChatHistory', (data : any) => {
       if(!ChatingWithUser || !ChatingWithUser.id) return;
 
       connection.log("Fetching chat history for user "+ ChatingWithUser.id)
@@ -417,7 +428,7 @@ module.exports = class Connection {
           page: data.page + 25,
           unSeenMsgsCount : dataD.unSeenMsgsCount
         });
-        if(socket && ChatingWithUser) socket.emit("removeMsgsRecievedAlert" , {
+        if(socket && ChatingWithUser) socket?.emit("removeMsgsRecievedAlert" , {
           name: ChatingWithUser.name,
           code: ChatingWithUser.code
         })
@@ -432,7 +443,7 @@ module.exports = class Connection {
         }
       })
     });
-    socket.on('msgsSeen', function (data) {
+    socket?.on('msgsSeen', function () {
       if (!ChatingWithUser || !ChatingWithUser.id) return;
       let friendID = ChatingWithUser.id;
       server.database.msgsSeen(userID, friendID, () => {
@@ -445,7 +456,7 @@ module.exports = class Connection {
         friendConn.everySocket('msgsSeen', myData)
       })
     })
-    socket.on('deleteMsg', function (data) {
+    socket?.on('deleteMsg', function (data : any) {
       let textID = data.textID;
       if (isNaN(textID)) return;
       if (!ChatingWithUser || !ChatingWithUser.id) return;
@@ -460,7 +471,7 @@ module.exports = class Connection {
         friendConn.everySocket('deleteMsg', myData)
       })
     })
-    socket.on('editMsg', function (data) {
+    socket?.on('editMsg', function (data : any) {
       let textID = data.textID
       if (data.message == null) return;
       let message = data.message.trim()
@@ -481,14 +492,14 @@ module.exports = class Connection {
     interface unlinkAccountLinks{
       friendID : string
     }
-    socket.on('unlinkAccountLinks', function (data) {
+    socket?.on('unlinkAccountLinks', function (data : any) {
       server.database.unlinkAccountLinks(userID, data.name, data.code, (dataD : unlinkAccountLinks) => {
         if (dataD.friendID != null) {
           user.GetAccountLink(connection, server, socket);
         }
       })
     })
-    socket.on('getAccountLinks', function () {
+    socket?.on('getAccountLinks', function () {
       user.GetAccountLink(connection, server, socket);
     })
     interface setAccountLinks {
@@ -496,7 +507,7 @@ module.exports = class Connection {
       code : number,
       friendID : string
     }
-    socket.on('setAccountLinks', function (data) {
+    socket?.on('setAccountLinks', function (data : any) {
       server.database.setAccountLinks(userID, data.email, data.password, (dataD : setAccountLinks) => {
         if (dataD.friendID != null) {
           user.GetAccountLink(connection, server, socket);
@@ -508,20 +519,20 @@ module.exports = class Connection {
     interface accessAccountLinks {
       AuthToken : string
     }
-    socket.on('accessAccountLinks', function (data) {
+    socket?.on('accessAccountLinks', function (data : any) {
       server.database.accessAccountLinks(userID, data.name, data.code, currentPlatform, (dataD : accessAccountLinks) => {
         socket?.emit('accessAccountLinks', dataD.AuthToken);
       })
     })
 
-    // socket.on('getSpecificContent', function(data) {
+    // socket?.on('getSpecificContent', function(data) {
     //   user.getSpecificContent(data, connection, server, socket, CommentPage)
     // })
     interface getTopPosts{
       categoryName : string,
       postsList : string
     }
-    socket.on('getTopPosts', function (data) {
+    socket?.on('getTopPosts', function (data : any) {
       connection.log(`Fetching posts for ${data.categoryID != 1 ? "Community" : "Profile "+data.name+"#"+data.code}`)
       server.database.getTopPosts(connection.id,data.categoryID, data.name, data.code, data.page, (dataD : getTopPosts) => {
         socket?.emit('getCategoryName',{
@@ -538,7 +549,7 @@ module.exports = class Connection {
       categoryList : string,
       categorySuggestionList : string
     }
-    socket.on('getCategoryList', function (data) {
+    socket?.on('getCategoryList', function (data : any) {
       let categoryName = data.categoryName;
       if(categoryName.trim().length === 0) return;
       server.database.getCategoryList(categoryName,(dataD : getCategoryList) => {
@@ -551,7 +562,7 @@ module.exports = class Connection {
     interface getTopComments{
       commentsList: string
     }
-    socket.on('getTopComments', function (data) {
+    socket?.on('getTopComments', function (data : any) {
       if (data.contentID == null || isNaN(data.contentID)) return;
       if (data.page == null || isNaN(data.page)) return;
       if (data.itsComment == null) return;
@@ -580,7 +591,7 @@ module.exports = class Connection {
       disagree : string,
       error : number
     }
-    socket.on('setUserOpinion', function (data) {
+    socket?.on('setUserOpinion', function (data : any) {
       server.database.setUserOpinion(userID, data.postID, data.commentID, data.opinion, (dataD : setUserOpinion) => {
         socket?.emit('setUserOpinion', {
           error: dataD.error,
@@ -592,7 +603,7 @@ module.exports = class Connection {
         });
       })
     })
-    socket.on('deleteContent', function (data) {
+    socket?.on('deleteContent', function (data : any) {
       server.database.deleteContent(userID, data.postID, data.commentID, () => {
         connection.log(`Deactivating Content with id ${data.postID ? data.postID : data.commentID}`)
         let deleteCont = {
@@ -605,7 +616,7 @@ module.exports = class Connection {
     interface saveContent{
       answer : number
     }
-    socket.on('saveContent', function (data) {
+    socket?.on('saveContent', function (data : any) {
       connection.log(`Editing Content with id ${data.postID ? data.postID : data.commentID}`)
       server.database.saveContent(userID, data.postID, data.commentID, data.text, (dataD : saveContent) => {
         //make it show also on all users when edit happens
@@ -618,10 +629,10 @@ module.exports = class Connection {
       })
     })
 
-    // socket.on('cancelMediaFile', function() {
+    // socket?.on('cancelMediaFile', function() {
 
     // })
-    socket.on('discardPost', function () {
+    socket?.on('discardPost', function () {
       if(!CreatingPostFor){
         WINDOW = windowState.HOME
       } else if (CreatingPostFor.type === 1) {
@@ -639,8 +650,8 @@ module.exports = class Connection {
         window: WINDOW
       });
     })
-    socket.on('fetchPostType',()=>{
-      if(socket && CreatingPostFor) socket.emit('fetchPostType',{
+    socket?.on('fetchPostType',()=>{
+      if(socket && CreatingPostFor) socket?.emit('fetchPostType',{
         type : CreatingPostFor.type,
         name : CreatingPostFor.name,        
         code : CreatingPostFor.code        
@@ -650,7 +661,7 @@ module.exports = class Connection {
       prof : string,
       fileName : string
     }
-    socket.on('updateUserPicture', (data : setUserPicture)=>{
+    socket?.on('updateUserPicture', (data : setUserPicture)=>{
         if(!data || !data.fileName || !data.prof) return;
         const profPic = data.prof === "Profile" ? data.fileName : null;
         const wallPic = data.prof === "Wallpaper"? data.fileName : null;
@@ -674,7 +685,7 @@ module.exports = class Connection {
           socket?.emit('updateUserPicture',{ prof : data.prof , fileName : data.fileName })
         })
     })
-    socket.on('startCreatingPost', async function (data : CreatingPostFor) {
+    socket?.on('startCreatingPost', async function (data : CreatingPostFor) {
       if (data.type == 1 || data.type == 2 || data.type == 3) {
         const folderName = await axios.post('/CreateTempDirectory',{
           token : user.token,
@@ -733,7 +744,7 @@ module.exports = class Connection {
       postID : string,
       error : number
     }
-    socket.on('createPost', async function (data) {
+    socket?.on('createPost', async function (data : any) {
       let postText = data.text && data.text.trim().length != 0 ? data.text.trim() : null;
       let postUrl =  data.url && data.url.trim().length != 0 ? user.checkYoutubeUrl(data.url.trim()) : null;
       let postTitle = data.title ? data.title.trim() : null;
@@ -812,7 +823,7 @@ module.exports = class Connection {
       commentDate : string,
       error : string
     }
-    socket.on('createComment', function (data) {
+    socket?.on('createComment', function (data : any) {
       if (data.text == null || data.text.trim().length == 0) return;
       let postID = ViewingPostID;
       let commentID = ViewingCommentID;
@@ -834,7 +845,7 @@ module.exports = class Connection {
     interface manageFriendRequest{
       requestHandler : number
     }
-    socket.on('manageFriendRequest', function (data) {
+    socket?.on('manageFriendRequest', function (data : any) {
       if (!ViewingProfile || !ViewingProfile.id || !ViewingProfile.name  || !ViewingProfile.code) return
       if(ViewingProfile.id === connection.id) return;
       let friendID = ViewingProfile.id;
@@ -925,7 +936,7 @@ module.exports = class Connection {
       birthDate : string,
       error : number
     }
-    socket.on('getUserInformation', function () {
+    socket?.on('getUserInformation', function () {
       server.database.getUserInformation(userID, (dataD : getUserInformation) => {
         socket?.emit('getUserInformation', {
           firstname: dataD.firstname,
@@ -941,14 +952,14 @@ module.exports = class Connection {
     interface editProfileInfo{
       error : number
     }
-    socket.on('editProfileInfo', function (data) {
+    socket?.on('editProfileInfo', function (data : any) {
       server.database.editProfileInfo(userID, data.firstName, data.lastName, data.gender, data.date, (dataD : editProfileInfo) => {
         socket?.emit('editProfileInfo', {
           error: dataD.error
         });
       })
     })
-    socket.on('searchForUser', function (data) {
+    socket?.on('searchForUser', function (data : any) {
       if (data.name == null || data.code == null || isNaN(data.code)) return;
       server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
         socket?.emit('searchForUser', {
@@ -966,7 +977,7 @@ module.exports = class Connection {
       wall : string,
       friendRequest : number,
     }
-    socket.on('showUserProfile', (data) => {
+    socket?.on('showUserProfile', (data : any) => {
       let name = user.name;
       let code = user.code;
       if(data && data.name && data.code && !isNaN(data.code) && data.name.length != 0 && data.name.length < 50){
@@ -975,7 +986,7 @@ module.exports = class Connection {
       }
       // if(WINDOW != windowState.PROFILE){
       //   WINDOW = windowState.PROFILE;
-      //   socket.emit('OpenWindow', { window: WINDOW });
+      //   socket?.emit('OpenWindow', { window: WINDOW });
       // }
       server.database.getUserProfile(connection.id, name, code, (dataD : getUserProfile) => {
           ViewingProfile = {
@@ -998,7 +1009,7 @@ module.exports = class Connection {
     interface editPassword{
       error: number
     }
-    socket.on('editPassword', function (data) {
+    socket?.on('editPassword', function (data : any) {
       server.database.editPassword(userID, data.oldPassword, data.confPassword, data.newPassword, (dataD : editPassword) => {
         socket?.emit('editPassword', dataD.error);
       })
@@ -1010,7 +1021,7 @@ module.exports = class Connection {
       prof : string,
       wall : string
     }
-    socket.on('SetThemeColor', (data)=>{
+    socket?.on('SetThemeColor', (data : any)=>{
       server.database.SetThemeColor(userID, data.color, ()=>{
         user.settings.Theme_Color = data.color;
         socket?.emit('registerUser', user.ToJson());
@@ -1018,7 +1029,7 @@ module.exports = class Connection {
       
     })
     
-    socket.on('OpenWindow', (data) => {
+    socket?.on('OpenWindow', (data : any) => {
       // if (WINDOW == data.window)
       //   return;
       if(!windowState.isWindow(data.window)) return;
@@ -1056,7 +1067,7 @@ module.exports = class Connection {
       }
       //if (data.window === windowState.STORE) {
         // server.database.getSkins(null, 0, 0, (dataD) => {
-        //   socket.emit('getSkins', {
+        //   socket?.emit('getSkins', {
         //     skinData: dataD.skinData
         //   });
         // })
@@ -1068,7 +1079,7 @@ module.exports = class Connection {
       socket?.emit('OpenWindow', data);
       connection.log("Showing " + WINDOW + " Tab")
     })
-    socket.on('validateCall',(data)=>{
+    socket?.on('validateCall',(data : any)=>{
       for (let key in server.connections) {
         if (server.connections.hasOwnProperty(key)) {
           if (server.connections[key].user.name == data.name && server.connections[key].user.code == data.code) {
@@ -1087,7 +1098,7 @@ module.exports = class Connection {
         }
       }
     })
-    socket.on('callUser', function (data) {
+    socket?.on('callUser', function (data : any) {
         for (let key in server.connections) {
           if (server.connections.hasOwnProperty(key)) {
             if (server.connections[key].user.name == data.name && server.connections[key].user.code == data.code) {
@@ -1105,7 +1116,7 @@ module.exports = class Connection {
                 wall : user.wall,
                 signal : data.signal,
                 connectionID : data.connectionID,
-                socketID : socket ? socket.id : null,
+                socketID : socket ? socket?.id : null,
                 silentCall : data.silentCall,
                 newMember : data.newMember,
                 reJoin
@@ -1119,7 +1130,7 @@ module.exports = class Connection {
           }
         }
     });
-    socket.on('answerCall',(data)=>{
+    socket?.on('answerCall',(data : any)=>{
       if(data && data.socketID && connection.callInfo) {
         if(connection.lobby.length != 0 && connection.callInfo.room == "public"){
           let lobby : typeof Lobby = server.lobbys[connection.callInfo.id];
@@ -1166,30 +1177,32 @@ module.exports = class Connection {
         server.io.to(data.socketID).emit('callAccepted', returnData)
       } 
     })
-    socket.on('hangupCall',()=>{
+    socket?.on('hangupCall',()=>{
       connection.hangupCall();
     })
-    socket.on('callRinging',()=>{
+    socket?.on('callRinging',()=>{
       if(connection.callInfo){
         // server.connections[connection.callWithUser.id].everySocket('callRinging') //remove everysocket
       }
     })
-    socket.on('updateVoiceActivity',(data)=>{
+    socket?.on('updateVoiceActivity',(data : any)=>{
       if(data && data.volume && data.id && connection.callInfo){
         // server.connections[connection.callWithUser.id].everySocket('updateVoiceActivity', data)  //remove everysocket
       }
     })
-    socket.on('inviteToLobby', async (data)=>{
+    socket?.on('inviteToLobby', async (data : any)=>{
       if(!data || !data.name || !data.code) return;
       connection.log(`Inviting ${data.name}#${data.code}`)
         //taking private then inviting people in, we create a new lobby and with all the people invited including the guys in the previous voice call
-      await server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
+      await server.database.searchForUser(userID, data.name, data.code, async (dataD : searchForUser) => {
         if(!dataD.friendID || !server.connections[dataD.friendID]) {
           connection.log("user is not on server connection yet")
           return;
         }
         
-        const lobby : typeof Lobby = connection.callInfo && connection.callInfo.room == "public" ? server.lobbys[connection.callInfo.id] : server.createLobby();
+        const lobby : typeof Lobby = connection.callInfo && connection.callInfo.room == "public" ? server.lobbys[connection.callInfo.id] : await server.createLobby();
+
+        if(lobby == null) return;
         //set callerid to the inviter since the group got created now
         if(connection.callInfo && connection.callInfo.room == "private") lobby.callInfo.callStarterID = connection.id;
         
@@ -1220,11 +1233,11 @@ module.exports = class Connection {
 
           let conn = server.connections[connection.callInfo.id];
           // lobby creator
-          server.joinLobby(connection, lobby.id)
+          await server.joinLobby(connection, lobby.id)
           connection.callInfo = { id : lobby.id , callStarterID : lobby.callInfo.callStarterID, room : 'public'};
           lobby.callInfo.members.push({ id : connection.id, flag : true , finished : true });
           // who was in private call with the creator
-          server.joinLobby(conn, lobby.id)
+          await server.joinLobby(conn, lobby.id)
           membersToCall.push({
             name : conn.user.name,
             code : conn.user.code,
@@ -1239,7 +1252,7 @@ module.exports = class Connection {
         } 
         if(connection.callInfo && connection.callInfo.room == "public" && !skipInvite){
           let conn = server.connections[dataD.friendID];
-          server.joinLobby(conn, lobby.id);
+          await server.joinLobby(conn, lobby.id);
           membersToCall.push({
             name : conn.user.name,
             code : conn.user.code,

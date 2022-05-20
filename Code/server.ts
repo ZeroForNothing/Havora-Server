@@ -6,32 +6,42 @@ const Database = require('./Database')
 const User = require('./User')
 const PlatformState = require('./Utility/PlatformState')
 //Lobbies
-const LobbyBase = require('./Lobbies/LobbyBase')
 const Lobby = require('./Lobbies/Lobby')
 const LobbySettings = require('./Lobbies/LobbySettings')
 
+interface Group {
+  Group_ID : string,
+  Group_Name : string,
+  Create_Date : string,
+  Group_Users ?: string
+}
 
 module.exports = class Server {
   connections: any;
   database: typeof Database;
   platformState : typeof PlatformState;
   lobbys : any;
-  lobbyBase : typeof LobbyBase;
   io : any;
 
   constructor(io : any) {
       this.connections = [];
-      this.database = new Database(),
-      this.platformState = new PlatformState(),
-
-      this.lobbys = [],
-      this.lobbyBase = new LobbyBase()
-      this.lobbyBase.id = "Lobby";
-      this.lobbys["Lobby"] = this.lobbyBase;
-
+      this.database = new Database();
+      this.platformState = new PlatformState();
+      this.lobbys = [];
       this.io = io;
+      this.fetchAllGroups();
   }
-  
+  fetchAllGroups(){
+    this.database.getAllGroups(async (dataD : any) => {
+      if(dataD.allGroups){
+        const allGroups = JSON.parse(dataD.allGroups);
+        allGroups.forEach((elem : Group )=> {
+          this.lobbys[elem.Group_ID] = new Lobby(elem.Group_ID , elem.Group_Name, new LobbySettings(10, 1), elem.Create_Date)
+          this.lobbys[elem.Group_ID].users = elem.Group_Users ? elem.Group_Users.split(',') : [];
+        });
+      }
+    })
+  }
 
   log(text : string){
     console.log("Web main =>" , text)
@@ -47,17 +57,18 @@ module.exports = class Server {
     }
     // server.log("Fetching user data on " + email+" with platform " + platform);
     server.database.getDataForSocket(email, (data : typeof User) => {
-        if (data.id == null) {
+        const userID : string = data.id;
+        if (userID == null) {
           server.log(`User with ${email} is invalid`);
           return;
         }
         //Add also ClientMustBeOpened when opening games
-        if (server.connections[data.id.toString()]) {
+        if (server.connections[userID]) {
           //Dont forget to tell the old user new socket got opened if it was opened before close it
-          server.connections[data.id.toString()].startOtherPlatform(socket, platform, server);
+          server.connections[userID].startOtherPlatform(socket, platform, server);
         }
         else {
-          server.connections[data.id.toString()] = new Connection(socket, server, platform, data)
+          server.connections[userID] = new Connection(socket, server, platform, data)
         }
     })
   }
@@ -111,37 +122,40 @@ module.exports = class Server {
     server.log('Closing down lobby ( ' + index + ' )');
     delete server.lobbys[index];
   }
-  createLobby(name : string = nanoid()) {
+  async createLobby(name : string = nanoid()) {
     let server = this;
     if (name == null || name.trim().length == 0) {
       server.log("Must insert lobby name");
       return;
     }
-    let checkLobbyAlreadyExist = false;
-    Object.keys(this.lobbys).forEach(lobbyIndex => {
-      if (this.lobbys[lobbyIndex].name == name) {
-        checkLobbyAlreadyExist = true;
-        return;
-      }
-    });
-    if (checkLobbyAlreadyExist) {
-      server.log("Lobby with name: " + name + " already exists")
-      return;
-    }
-    let lobby : typeof Lobby = new Lobby(name, new LobbySettings(10, 1));
-
-    let lobbyID : string = lobby.id;
-    lobby.endLobby = function() {
-      server.closeDownLobby(lobbyID)
-    }
-    server.lobbys[lobbyID] = lobby;
-
-    return lobby;
+    // let checkLobbyAlreadyExist = false;
+    // Object.keys(this.lobbys).forEach(lobbyIndex => {
+    //   if (this.lobbys[lobbyIndex].name == name) {
+    //     checkLobbyAlreadyExist = true;
+    //     return;
+    //   }
+    // });
+    // if (checkLobbyAlreadyExist) {
+    //   server.log("Lobby with name: " + name + " already exists")
+    //   return;
+    // }
+    return new Promise((resolve,reject)=>{
+      server.database.createGroup(name, async (data : any) => {
+        const lobbyID = data.groupID;
+        if(!lobbyID) reject(null);
+        let lobby : typeof Lobby = new Lobby(lobbyID , name, new LobbySettings(10, 1), data.createDate);
+        lobby.endLobby = function() {
+          server.closeDownLobby(lobbyID)
+        }
+        server.lobbys[lobbyID] = lobby;
+        resolve(lobby);
+      })
+    })
   }
-  joinLobby(connection = Connection, lobbyID : string) {
+  async joinLobby(connection = Connection, lobbyID : string) {
     let lobby : typeof Lobby = this.lobbys[lobbyID];
     if (lobby && lobby.canEnterLobby(connection)){
-        lobby.onEnterLobby(connection)
+        await lobby.onEnterLobby(connection)
     } 
   }
 }

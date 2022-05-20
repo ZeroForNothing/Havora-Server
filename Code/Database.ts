@@ -629,6 +629,64 @@ module.exports = class Database {
       console.log("Database cought error at 41: " + err);
     })
   }
+  addToGroup(userID: string, lobbyID : string,allUsers : string[],lobbies : string[], callback : Callback) {
+    sql.connect(config).then((pool : any) => {
+      // Stored procedure
+      return pool.request()
+        .input('userID', sql.BigInt, userID)
+        .input('lobbyID', sql.BigInt, lobbyID)
+        .input('allUsers', sql.NVarChar(sql.MAX), allUsers)
+        .input('lobbies', sql.NVarChar(sql.MAX), lobbies)
+        .execute('addToGroup')
+    }).then((result: Output) => {
+      callback(null)
+    }).catch((err: any) => {
+      // ... error checks
+      console.log("Database cought error at 42: " + err);
+    })
+  }
+  getMyGroups(userID: string,callback : Callback) {
+    sql.connect(config).then((pool : any) => {
+      // Stored procedure
+      return pool.request()
+        .input('userID', sql.BigInt, userID)
+        .output('myGroups', sql.NVarChar(sql.MAX))
+        .execute('getMyGroups')
+    }).then((result: Output) => {
+      callback(result.output)
+    }).catch((err: any) => {
+      // ... error checks
+      console.log("Database cought error at 43: " + err);
+    })
+  }
+  getAllGroups(callback : Callback) {
+    sql.connect(config).then((pool : any) => {
+      // Stored procedure
+      return pool.request()
+        .output('allGroups', sql.NVarChar(sql.MAX))
+        .execute('getAllGroups')
+    }).then((result: Output) => {
+      callback(result.output)
+    }).catch((err: any) => {
+      // ... error checks
+      console.log("Database cought error at 44: " + err);
+    })
+  }
+  createGroup(name : string, callback : Callback) {
+    sql.connect(config).then((pool : any) => {
+      // Stored procedure
+      return pool.request()
+        .input('name', sql.NVarChar(50), name)
+        .output('groupID', sql.BigInt)
+        .output('createDate', sql.DateTime)
+        .execute('createGroup')
+    }).then((result: Output) => {
+      callback(result.output)
+    }).catch((err: any) => {
+      // ... error checks
+      console.log("Database cought error at 45: " + err);
+    })
+  }
   createPost(userID : string, toUserID : string, categoryType : number, title: string, text: string, url: string, mediaFiles: string, mediaFolder: string, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
@@ -647,7 +705,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch((err: any)=> {
       // ... error checks
-      console.log("Database cought error at 42: " + err);
+      console.log("Database cought error at 46: " + err);
     })
   }
   getCategoryList(categoryName: string, callback : Callback) {
@@ -661,7 +719,7 @@ module.exports = class Database {
       callback(result.output)
     }).catch((err: any)=> {
       // ... error checks
-      console.log("Database cought error at 43: " + err);
+      console.log("Database cought error at 47: " + err);
     })
   }
 }

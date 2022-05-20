@@ -4,19 +4,23 @@ let Connection = require('../Connection')
 export {}
 module.exports = class Lobby extends LobbyBase {
   name : string;
+  createDate : string;
   settings : typeof LobbySettings;
-  constructor(name : string, settings = LobbySettings) {
-    super();
+  users : string[];
+  constructor(id : string, name : string, settings = LobbySettings , createDate : string) {
+    super(id);
+    this.createDate = createDate;
     this.name = name;
     this.settings = settings;
     this.endLobby = function() {};
     this.callInfo = { members : new Array(), callStarterID : undefined };
+    this.users = [];
   }
 
   canEnterLobby() {
     let lobby = this;
     let maxPlayerCount = lobby.settings.maxPlayers;
-    let currentPlayerCount = lobby.connections.length;
+    let currentPlayerCount = lobby.users.length;
 
     if (currentPlayerCount + 1 > maxPlayerCount) {
       return false;
@@ -25,25 +29,48 @@ module.exports = class Lobby extends LobbyBase {
   }
 
   onEnterLobby(connection = Connection) {
-    let lobby = this;
+    let lobby : Lobby = this;
     let alreadyInLobby = false;
-
-    lobby.connections.forEach((tempConn : typeof Connection) => {
-      if (tempConn.id == connection.id) {
+    let allUsers : string[] = [...lobby.users];
+    lobby.users.forEach((userID : string) => {
+      if (userID == connection.id) {
         alreadyInLobby = true;
-        connection.log("Already in the lobby before")
-        return;
+        connection.log("Already in the lobby")
       }
     });
 
     if (!alreadyInLobby) {
-      lobby.connections.push(connection);
-      connection.lobby.push(lobby.name);
+      // do enter lobby behavior
+      allUsers.push(connection.id);
+      console.log([...connection.lobby , lobby.id])
+      return new Promise((resolve,reject)=>{ 
+        connection.server.database.addToGroup(connection.id, lobby.id , allUsers, [...connection.lobby , lobby.id], () => {
+          lobby.users.push(connection.id);  // static after server restart // starts from the data from database
+          lobby.connections.push(connection); // changable after server restart // starts from 0
+          connection.lobby.push(lobby.name); // changable after server restart // starts from 0
+          connection.everySocket('updateGroupList' , { lobbies : connection.lobby })
+          connection.everySocketJoinLobby(lobby.id)
+          connection.log("Joined Lobby ("+ lobby.id+ ")")
+          resolve(true);
+        })
+      })
     }
-    connection.everySocketJoinLobby(lobby.id);
-    connection.everySocket("onEnterLobby" , {name : this.name})
-    // do enter lobby behavior
-    connection.log("Joined Lobby ("+ lobby.id+ ")")
+    else{
+      let connectionAlreadyMade = false;
+      lobby.connections.forEach((conn : typeof Connection) => {
+        if (conn.id == connection.id) {
+          connectionAlreadyMade = true;
+          connection.log("Connection already made")
+        }
+      });
+      if(!connectionAlreadyMade){
+        lobby.connections.push(connection);
+        connection.lobby.push(lobby.id);
+        connection.everySocketJoinLobby(lobby.id);
+      }
+      connection.log("Returned to Lobby ("+ lobby.id+ ")")
+      return;
+    }
   }
 
   onLeaveLobby(connection = Connection) {

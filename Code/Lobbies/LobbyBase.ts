@@ -1,11 +1,8 @@
-let {
-  nanoid
-} = require('nanoid')
 module.exports = class LobbyBase {
   id : string;
   connections : [];
-  constructor() {
-    this.id = nanoid();
+  constructor(id : string) {
+    this.id = id;
     this.connections = [];
   }
   onUpdate() {}
