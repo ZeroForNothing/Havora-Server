@@ -22,12 +22,13 @@ interface CreatingPostFor{
   code : number  | null,
   folderName : string
 }
-interface ChatingWithUser{
-  id : string,
-  name :  string,
-  code : number
+interface chatInfo{
+  userID ?: string,
+  name ?:  string,
+  code ?: number,
+  groupID ?: string
 }
-interface CallWithUser{
+interface callInfo{
   id : string,
   callStarterID ?: string,
   connectionID ?: string,
@@ -51,7 +52,7 @@ module.exports = class Connection {
   mobileSocket ?: Socket;
   lobby : typeof Lobby[];
   server : typeof Server;
-  callInfo ?: CallWithUser;
+  callInfo ?: callInfo;
 
   constructor(socket : Socket, server : typeof Server, currentPlatform : string, userData : typeof User) {
     this.id = userData.id;
@@ -73,8 +74,7 @@ module.exports = class Connection {
     this.user = new User(userData);
 
     this.server.database.getMyGroups(this.id,async (dataD : any) => {
-      console.log(dataD)
-      if(dataD.allGroups){
+      if(dataD.myGroups){
         const myGroups = dataD.myGroups.split(',');
         myGroups.forEach(async (lobbyID : string )=> {
           if(this.server.lobbys[lobbyID]){
@@ -226,7 +226,7 @@ module.exports = class Connection {
     let ViewingCommentID : string | null;
     let ViewingProfile : userSmallData;
 
-    let ChatingWithUser : ChatingWithUser | null
+    let chatInfo : chatInfo | null
     let CreatingPostFor : CreatingPostFor | null;
 
     let connection : Connection = this;
@@ -269,7 +269,12 @@ module.exports = class Connection {
     }
     socket?.on('tellFriendsImOnline', function () {
       // connection.log("Fetching friends list")
-      socket?.emit('updateGroupList',{ lobbies : connection.lobby })
+      let lobbies : string[] = [];
+      connection.lobby.forEach(lobbyID => {
+        lobbies.push(server.lobbys[lobbyID].name)
+      });
+      socket?.emit('updateGroupList',{ lobbies , lobby : null})
+      
       server.database.getFriendsList(userID, (dataD : friendListJson) => {
         user.friendList = dataD.friendListJson ? JSON.parse(dataD.friendListJson) : null;
         socket?.emit('updateFriendList', dataD);
@@ -319,7 +324,7 @@ module.exports = class Connection {
       unSeenMsgsCount : number
     }
     socket?.on('sendMessage', async function (data : any) {
-      if (!ChatingWithUser || !ChatingWithUser.id) return;
+      if (!chatInfo) return;
       if(!data && !data.message && !data.folderName) return;
       let folderName = data.folderName;
       let tempFiles : string[] = [];
@@ -340,9 +345,9 @@ module.exports = class Connection {
         });
       }
       if(folderName && tempFiles.length == 0) return;
-      connection.log(`Sending message to userID ${ChatingWithUser.id}`)
-      server.database.saveMsg(userID, ChatingWithUser.id, data.message , folderName , tempFiles, async (dataD : saveMsg) => {
-        let isMedia = folderName && tempFiles && tempFiles.length != 0
+      // connection.log(`Sending message to userID ${ChatingWithUser.id}`)
+      server.database.saveMsg(userID, chatInfo.userID, chatInfo.groupID, data.message , folderName , tempFiles, async (dataD : saveMsg) => {
+        let isMedia : boolean = folderName && tempFiles && tempFiles.length != 0
         if(isMedia){
           const filesMoved : boolean = await axios.post('/CreateDirectory',{
             token : user.token,
@@ -372,42 +377,44 @@ module.exports = class Connection {
           isMedia
         }
         connection.everySocket('sendMessage', msgData)
-        if(!ChatingWithUser) return;
-        let friendConn = server.connections[ChatingWithUser.id]
-        if (friendConn == null) return;
-
-        let friendName = friendConn.user.name
-        let friendCode = friendConn.user.code
-        let friendData = {
+        if(!chatInfo) return;
+        
+        const returnData = {
           message: data.message,
           textID: dataD.textID,
           name: user.name,
           code: user.code,
+          prof: user.prof,
+          token: user.token,
           unSeenMsgsCount: dataD.unSeenMsgsCount,
           myself: false,
           folderName,
           tempFiles,
           isMedia
         }
-        friendConn.everySocket('sendMessage', friendData)
-        if (friendConn.mobileSocket != null || friendConn.webSocket.length != 0 || friendConn.clientSocket != null || friendConn.gameSocket != null) {
-          server.database.msgsRecieved(connection.id, friendConn.id, () => {
-            let myData = {
-              name: friendName,
-              code: friendCode
-            }
-            connection.everySocket('msgsRecieved', myData)
-            friendConn.everySocket('msgsRecievedWhileNotTaklingWithUser', friendData)
-          })
+        if(chatInfo.groupID) connection.everySocketInLobby('sendMessage' , chatInfo.groupID , returnData)
+        else if(chatInfo.userID){
+          let friendConn : Connection = server.connections[chatInfo.userID]
+          friendConn.everySocket('sendMessage', returnData)
+          if (friendConn.mobileSocket != null || friendConn.webSocket.length != 0 || friendConn.clientSocket != null) {
+            server.database.msgsRecieved(connection.id, friendConn.id, () => {
+              let myData = {
+                name: friendConn.user.name,
+                code: friendConn.user.code
+              }
+              connection.everySocket('msgsRecieved', myData)
+              friendConn.everySocket('msgsRecievedWhileNotTalkingWithUser', returnData)
+            })
+          }
         }
       })
     })
-    socket?.on('msgsRecievedWhileNotTaklingWithUser',(data : any)=>{
-      if(!data.showUnreadMsgs && ChatingWithUser && ChatingWithUser.name == data.name && ChatingWithUser.code == data.code){
-        socket?.emit('msgsRecievedWhileNotTaklingWithUser')
+    socket?.on('msgsRecievedWhileNotTalkingWithUser',(data : any)=>{
+      if(!data.showUnreadMsgs && chatInfo && chatInfo.name == data.name && chatInfo.code == data.code){
+        socket?.emit('msgsRecievedWhileNotTalkingWithUser')
       }else{
         data.showUnreadMsgs = true;
-        socket?.emit('msgsRecievedWhileNotTaklingWithUser' , data)
+        socket?.emit('msgsRecievedWhileNotTalkingWithUser' , data)
       }
     })
     interface showChatHistory{
@@ -415,10 +422,10 @@ module.exports = class Connection {
       unSeenMsgsCount : number
     }
     socket?.on('showChatHistory', (data : any) => {
-      if(!ChatingWithUser || !ChatingWithUser.id) return;
+      if(!chatInfo) return;
 
-      connection.log("Fetching chat history for user "+ ChatingWithUser.id)
-      server.database.showChatHistory(userID, ChatingWithUser.id, data.page, (dataD : showChatHistory) => {
+      // connection.log("Fetching chat history for user "+ ChatingWithUser.id)
+      server.database.showChatHistory(userID, chatInfo.userID , chatInfo.groupID, data.page, (dataD : showChatHistory) => {
 
         socket?.emit('showChatHistory', {
           refresh : data.refresh,
@@ -428,47 +435,55 @@ module.exports = class Connection {
           page: data.page + 25,
           unSeenMsgsCount : dataD.unSeenMsgsCount
         });
-        if(socket && ChatingWithUser) socket?.emit("removeMsgsRecievedAlert" , {
-          name: ChatingWithUser.name,
-          code: ChatingWithUser.code
+        if(socket && chatInfo && chatInfo.userID) socket?.emit("removeMsgsRecievedAlert" , {
+          name: chatInfo.name,
+          code: chatInfo.code
         })
-        if (!ChatingWithUser) return;
-        let friendConn = server.connections[ChatingWithUser.id]
-        if (friendConn){
+        if (!chatInfo) return;
+        let myData = {
+          name: user.name,
+          code: user.code
+        }
+        if(chatInfo.userID){
+          let friendConn = server.connections[chatInfo.userID]
+          if (friendConn){
+            friendConn.everySocket('msgsSeen', myData)
+          }
+        }
+      })
+    });
+    socket?.on('msgsSeen', function () {
+      if (!chatInfo) return;
+      if(chatInfo.userID){
+        let friendID = chatInfo.userID;
+        server.database.msgsSeen(userID, friendID, () => {
+          let friendConn = server.connections[friendID]
+          if (friendConn == null) return;
           let myData = {
             name: user.name,
             code: user.code
           }
           friendConn.everySocket('msgsSeen', myData)
-        }
-      })
-    });
-    socket?.on('msgsSeen', function () {
-      if (!ChatingWithUser || !ChatingWithUser.id) return;
-      let friendID = ChatingWithUser.id;
-      server.database.msgsSeen(userID, friendID, () => {
-        let friendConn = server.connections[friendID]
-        if (friendConn == null) return;
-        let myData = {
-          name: user.name,
-          code: user.code
-        }
-        friendConn.everySocket('msgsSeen', myData)
-      })
+        })
+      }
     })
     socket?.on('deleteMsg', function (data : any) {
       let textID = data.textID;
       if (isNaN(textID)) return;
-      if (!ChatingWithUser || !ChatingWithUser.id) return;
+      if (!chatInfo) return;
       server.database.deleteMsg(userID, textID, () => {
         let myData = {
           textID: textID
         }
         connection.everySocket('deleteMsg', myData)
-        if(!ChatingWithUser) return;
-        let friendConn = server.connections[ChatingWithUser.id]
-        if (friendConn == null) return;
-        friendConn.everySocket('deleteMsg', myData)
+        if(!chatInfo) return;
+        if(chatInfo.userID){
+          let friendConn = server.connections[chatInfo.userID]
+          if (friendConn == null) return;
+          friendConn.everySocket('deleteMsg', myData)
+        }else if(chatInfo.groupID){
+          connection.everySocketInLobby('deleteMsg',chatInfo.groupID, myData)
+        }
       })
     })
     socket?.on('editMsg', function (data : any) {
@@ -476,17 +491,21 @@ module.exports = class Connection {
       if (data.message == null) return;
       let message = data.message.trim()
       if (isNaN(textID) || message.length == 0) return;
-      if (!ChatingWithUser || !ChatingWithUser.id) return;
+      if (!chatInfo) return;
       server.database.editMsg(userID, textID, message, () => {
         let myData = {
           textID: textID,
           message : message
         }
         connection.everySocket('editMsg', myData)
-        if(!ChatingWithUser) return;
-        let friendConn = server.connections[ChatingWithUser.id]
-        if (friendConn == null) return;
-        friendConn.everySocket('editMsg', myData)
+        if(!chatInfo) return;
+        if(chatInfo.userID){
+          let friendConn = server.connections[chatInfo.userID]
+          if (friendConn == null) return;
+          friendConn.everySocket('editMsg', myData)
+        }else if(chatInfo.groupID){
+          connection.everySocketInLobby('editMsg',chatInfo.groupID, myData)
+        }
       })
     })
     interface unlinkAccountLinks{
@@ -862,8 +881,8 @@ module.exports = class Connection {
         }
         if (dataD.requestHandler == 0) {
           //remove friend or unfriend
-          if (ChatingWithUser && friendID == ChatingWithUser.id) {
-            ChatingWithUser = null;
+          if (chatInfo && friendID == chatInfo.userID) {
+            chatInfo = null;
             WINDOW = windowState.HOME;
             socket?.emit('OpenWindow', { window: WINDOW });
           }
@@ -1037,32 +1056,47 @@ module.exports = class Connection {
         socket?.emit('promptToDiscardPost');
         return;
       }
-      if(data.window === windowState.CHAT){
-        server.database.searchForUser(userID, data.name, data.code, (dataD : searchForUser) => {
-          const oldUserID = ChatingWithUser?.id;
-          if(oldUserID == dataD.friendID) return;
-          ChatingWithUser = {
-            id : dataD.friendID,
-            name : data.name,
-            code: data.code
-          }
-          WINDOW = windowState.CHAT;
-          const load = {
-            name: data.name, 
-            code: data.code,
-            token: dataD.token,
-            pic: dataD.prof,
-            inCall : connection.callInfo?.id == dataD.friendID
-          }   
-          socket?.emit("refreshChat")
-          WINDOW = data.window;
-          let inCall = ChatingWithUser && connection.callInfo?.id == ChatingWithUser.id
-          socket?.emit("SetCallFromRightPanel" , { callerChatOpened  : inCall })
-          socket?.emit('OpenWindow', { window : WINDOW , load });
-        })
+      if(data.window === windowState.CHAT && data.load){
+        if(data.load.name && data.load.code){
+          server.database.searchForUser(userID, data.load.name, data.load.code, (dataD : searchForUser) => {
+            if(chatInfo?.userID == dataD.friendID) return;
+            const name = data.load.name;
+            const code = data.load.code;
+            chatInfo = {
+              userID : dataD.friendID,
+              name,
+              code
+            }
+            const load = {
+              name, 
+              code,
+              inCall : connection.callInfo?.id == dataD.friendID
+            }   
+            WINDOW = windowState.CHAT;
+            socket?.emit("refreshChat")
+            socket?.emit("SetCallFromRightPanel" , { callerChatOpened  : chatInfo && connection.callInfo?.id == chatInfo.userID })
+            socket?.emit('OpenWindow', { window : WINDOW , load });
+          })
+        }else if(data.load.group){
+          server.lobbys.forEach((lobby : typeof Lobby) => {
+            if(data.load.group == lobby.name){
+              chatInfo = {
+                groupID : lobby.id
+              }
+              const load = {
+                name: lobby.name,
+                inCall : connection.callInfo?.id == lobby.id
+              }
+              WINDOW = windowState.CHAT;
+              socket?.emit("refreshChat")
+              socket?.emit("SetCallFromRightPanel" , { callerChatOpened  : chatInfo && connection.callInfo?.id == chatInfo.groupID })
+              socket?.emit('OpenWindow', { window : WINDOW , load });
+            }
+          });
+        }
         return;
       }else{
-        ChatingWithUser = null;
+        chatInfo = null;
         socket?.emit("SetCallFromRightPanel" , { callerChatOpened  : false})
       }
       //if (data.window === windowState.STORE) {

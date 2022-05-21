@@ -7,10 +7,12 @@ module.exports = class Lobby extends LobbyBase {
   createDate : string;
   settings : typeof LobbySettings;
   users : string[];
-  constructor(id : string, name : string, settings = LobbySettings , createDate : string) {
+  token : string;
+  constructor(id : string, name : string, settings = LobbySettings , createDate : string , token : string) {
     super(id);
     this.createDate = createDate;
     this.name = name;
+    this.token = token;
     this.settings = settings;
     this.endLobby = function() {};
     this.callInfo = { members : new Array(), callStarterID : undefined };
@@ -42,13 +44,12 @@ module.exports = class Lobby extends LobbyBase {
     if (!alreadyInLobby) {
       // do enter lobby behavior
       allUsers.push(connection.id);
-      console.log([...connection.lobby , lobby.id])
       return new Promise((resolve,reject)=>{ 
         connection.server.database.addToGroup(connection.id, lobby.id , allUsers, [...connection.lobby , lobby.id], () => {
           lobby.users.push(connection.id);  // static after server restart // starts from the data from database
           lobby.connections.push(connection); // changable after server restart // starts from 0
-          connection.lobby.push(lobby.name); // changable after server restart // starts from 0
-          connection.everySocket('updateGroupList' , { lobbies : connection.lobby })
+          connection.lobby.push(lobby.id); // changable after server restart // starts from 0
+          connection.everySocket('updateGroupList' , { lobbies: null , lobby : lobby.name })
           connection.everySocketJoinLobby(lobby.id)
           connection.log("Joined Lobby ("+ lobby.id+ ")")
           resolve(true);

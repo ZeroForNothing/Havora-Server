@@ -13,7 +13,8 @@ interface Group {
   Group_ID : string,
   Group_Name : string,
   Create_Date : string,
-  Group_Users ?: string
+  Group_Users ?: string,
+  Group_Token : string
 }
 
 module.exports = class Server {
@@ -36,7 +37,7 @@ module.exports = class Server {
       if(dataD.allGroups){
         const allGroups = JSON.parse(dataD.allGroups);
         allGroups.forEach((elem : Group )=> {
-          this.lobbys[elem.Group_ID] = new Lobby(elem.Group_ID , elem.Group_Name, new LobbySettings(10, 1), elem.Create_Date)
+          this.lobbys[elem.Group_ID] = new Lobby(elem.Group_ID , elem.Group_Name, new LobbySettings(10, 1), elem.Create_Date , elem.Group_Token)
           this.lobbys[elem.Group_ID].users = elem.Group_Users ? elem.Group_Users.split(',') : [];
         });
       }
@@ -143,7 +144,7 @@ module.exports = class Server {
       server.database.createGroup(name, async (data : any) => {
         const lobbyID = data.groupID;
         if(!lobbyID) reject(null);
-        let lobby : typeof Lobby = new Lobby(lobbyID , name, new LobbySettings(10, 1), data.createDate);
+        let lobby : typeof Lobby = new Lobby(lobbyID , name, new LobbySettings(10, 1), data.createDate , data.token);
         lobby.endLobby = function() {
           server.closeDownLobby(lobbyID)
         }

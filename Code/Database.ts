@@ -213,10 +213,11 @@ module.exports = class Database {
       console.log("Database cought error at 13: " + err);
     })
   }
-  saveMsg(userID : string, friendID : string, message : string, mediaFolder : string, mediaFiles : string , callback : Callback) {
+  saveMsg(userID : string, friendID : string, groupID : string, message : string, mediaFolder : string, mediaFiles : string , callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
+        .input('groupID', sql.BigInt, groupID)
         .input("friendID", sql.BigInt, friendID)
         .input('message', sql.NVarChar(300), message)
         .input('mediaFiles', sql.NVarChar(sql.MAX), mediaFiles)
@@ -230,11 +231,12 @@ module.exports = class Database {
       console.log("Database cought error at 14: " + err);
     })
   }
-  showChatHistory(userID : string, friendID : string, startPage : number, callback : Callback) {
+  showChatHistory(userID : string, friendID : string,groupID : string, startPage : number, callback : Callback) {
     sql.connect(config).then((pool : any) => {
       return pool.request()
         .input('userID', sql.BigInt, userID)
         .input('friendID', sql.BigInt, friendID)
+        .input('groupID', sql.BigInt, groupID)
         .input('startPage', sql.Int, startPage)
         .output('chatLog', sql.NVarChar(sql.MAX))
         .output("unSeenMsgsCount", sql.Int)
@@ -677,6 +679,7 @@ module.exports = class Database {
       // Stored procedure
       return pool.request()
         .input('name', sql.NVarChar(50), name)
+        .output('token', sql.VarChar(250))
         .output('groupID', sql.BigInt)
         .output('createDate', sql.DateTime)
         .execute('createGroup')
